@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Models\User;
-use App\Models\Transaction;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Hash;
-use App\Providers\RouteServiceProvider;
-use Illuminate\Support\Facades\Validator;
+use App\Models\CurrencyBalance;
+use App\Models\Currency;
+use App\Models\Role;
+use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Foundation\Auth\RegistersUsers;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 class RegisterController extends Controller
 {
@@ -30,7 +32,7 @@ class RegisterController extends Controller
      *
      * @var string
      */
-    protected $redirectTo = RouteServiceProvider::HOME;
+    protected $redirectTo = '/';
 
     /**
      * Create a new controller instance.
@@ -65,40 +67,39 @@ class RegisterController extends Controller
      */
     protected function create(array $data)
     {
-        // Default currency ID
-        (int) $currency = \App\Models\Currency::where('code', 'USD')->first()->id;
-
-        // Default amount
-        (int) $amount = 1000;
+        $currency = Currency::where('code', 'USD')->first();
+        $role = Role::where('name', 'customer')->first();
+        $fundingAmount = 1000;
 
         $user = User::create([
-            'role_id'   => \App\Models\Role::where('name', 'customer')->first()->id,
-            'name'      => $data['name'],
-            'email'     => $data['email'],
-            'password'  => Hash::make($data['password']),
+            'role_id' => $role->id,
+            'currency_id' => $currency->id,
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
         ]);
 
-        // Credit a new user with $1000.
+        // Credit a new user with $1000
         $transaction = Transaction::create([
-            'user_id'               => $user->id,
-            'recipient_id'          => 1,
-            'source_currency_id'    => $currency,
-            'target_currency_id'    => $currency,
-            'amount'                => $amount,
-            'rate'                  => 0.0,
-            'transfer_fee'          => 4.86,
-            'variable_fee'          => 0,
-            'fixed_fee'             => 4.86,
-            'type'                  => Transaction::TYPE['Credit'],
-            'status'                => Transaction::STATUS['Success'],
+            'user_id' => $user->id,
+            'recipient_id' => 1,
+            'source_currency_id' => $currency->id,
+            'target_currency_id' => $currency->id,
+            'amount' => $fundingAmount,
+            'rate' => 1.0,
+            'transfer_fee' => 0,
+            'variable_fee' => 0,
+            'fixed_fee' => 0,
+            'type' => Transaction::TYPE['Credit'],
+            'status' => Transaction::STATUS['Success'],
         ]);
 
-        \App\Models\CurrencyBalance::create([
-            'user_id'           => $user->id,
-            'transaction_id'    => $transaction['id'],
-            'USD'               => $amount,
-            'EUR'               => 0,
-            'NGN'               => 0,
+        CurrencyBalance::create([
+            'user_id' => $user->id,
+            'transaction_id' => $transaction->id,
+            'USD' => $fundingAmount,
+            'EUR' => 0,
+            'NGN' => 0,
         ]);
 
         return $user;

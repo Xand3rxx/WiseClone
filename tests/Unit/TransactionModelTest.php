@@ -22,10 +22,12 @@ class TransactionModelTest extends TestCase
     {
         parent::setUp();
 
-        // Create currencies
+        // Create currencies first (required for foreign keys)
+        Currency::create(['name' => 'Euro', 'code' => 'EUR', 'symbol' => '€']);
+        Currency::create(['name' => 'Nigerian Naira', 'code' => 'NGN', 'symbol' => '₦']);
         $this->usdCurrency = Currency::create(['name' => 'US Dollar', 'code' => 'USD', 'symbol' => '$']);
 
-        // Create roles
+        // Create roles (required for foreign keys)
         Role::create(['name' => 'administrator', 'url' => 'administrator']);
         Role::create(['name' => 'customer', 'url' => 'customer']);
 
@@ -177,4 +179,3 @@ class TransactionModelTest extends TestCase
         $this->assertEquals('-', $type->sign);
     }
 }
-

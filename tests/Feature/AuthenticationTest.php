@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Charge;
 use App\Models\Currency;
 use App\Models\Role;
 use App\Models\User;
@@ -16,10 +17,21 @@ class AuthenticationTest extends TestCase
     {
         parent::setUp();
 
-        // Create necessary data
+        // Create currencies first (required for foreign keys)
+        Currency::create(['name' => 'Euro', 'code' => 'EUR', 'symbol' => '€']);
+        Currency::create(['name' => 'Nigerian Naira', 'code' => 'NGN', 'symbol' => '₦']);
         Currency::create(['name' => 'US Dollar', 'code' => 'USD', 'symbol' => '$']);
+
+        // Create roles
         Role::create(['name' => 'administrator', 'url' => 'administrator']);
         Role::create(['name' => 'customer', 'url' => 'customer']);
+
+        // Create an admin user for recipient_id=1 in registration
+        User::factory()->create([
+            'id' => 1,
+            'role_id' => 1,
+            'email' => 'admin@wiseclone.com',
+        ]);
     }
 
     public function test_login_page_is_accessible(): void
@@ -70,8 +82,8 @@ class AuthenticationTest extends TestCase
         $response = $this->post('/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
         ]);
 
         $response->assertRedirect('/');
@@ -99,4 +111,3 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect('/login');
     }
 }
-

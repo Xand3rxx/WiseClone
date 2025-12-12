@@ -16,7 +16,12 @@ class UserTest extends TestCase
     {
         parent::setUp();
 
+        // Create currencies first (required for foreign keys)
+        Currency::create(['name' => 'Euro', 'code' => 'EUR', 'symbol' => '€']);
+        Currency::create(['name' => 'Nigerian Naira', 'code' => 'NGN', 'symbol' => '₦']);
         Currency::create(['name' => 'US Dollar', 'code' => 'USD', 'symbol' => '$']);
+        
+        // Create roles (required for foreign keys)
         Role::create(['name' => 'administrator', 'url' => 'administrator']);
         Role::create(['name' => 'customer', 'url' => 'customer']);
     }
@@ -70,4 +75,3 @@ class UserTest extends TestCase
         $this->assertTrue($customerUser->isCustomer());
     }
 }
-
