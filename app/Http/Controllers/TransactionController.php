@@ -276,7 +276,7 @@ class TransactionController extends Controller
     {
         return request()->validate([
             'recipient_uuid' => 'bail|required|string|exists:users,uuid',
-            'source_amount' => 'bail|required|numeric|min:1|max:99999999.99',
+            'source_amount' => 'bail|required|numeric|min:0.01|max:99999999.99',
             'target_amount' => 'bail|required|numeric|min:0|max:99999999.99',
             'source_currency_id' => 'bail|required|integer|exists:currencies,id',
             'target_currency_id' => 'bail|required|integer|exists:currencies,id',

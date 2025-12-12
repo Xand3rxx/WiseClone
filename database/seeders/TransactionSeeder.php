@@ -49,7 +49,7 @@ class TransactionSeeder extends Seeder
     {
         $fundingAmount = 1000.00;
 
-        $transaction = Transaction::create([
+            $transaction = Transaction::create([
             'user_id' => $customer->id,
             'recipient_id' => $admin->id,
             'source_currency_id' => $usdCurrency->id,
@@ -112,7 +112,7 @@ class TransactionSeeder extends Seeder
             $usdCurrency,
             $eurCurrency,
             5.51,
-            0.922,
+            0.95,  // December 2024 USD to EUR rate
             now()->subDays(3)
         );
 
@@ -124,7 +124,7 @@ class TransactionSeeder extends Seeder
             $usdCurrency,
             $ngnCurrency,
             5.90,
-            1520.00,
+            1600.00,  // December 2024 USD to NGN rate
             now()->subDays(1)
         );
 

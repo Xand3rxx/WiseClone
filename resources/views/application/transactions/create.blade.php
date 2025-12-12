@@ -230,15 +230,21 @@
         $sourceCurrency = $('#source-amount');
         $sourceCurrency.val($sourceCurrency.attr('data-max'));
 
-        // Numeral Formatting
+        // Numeral Formatting with decimal support
         const sourceAmount = new Cleave('#source-amount', {
           numeral: true,
-          numeralThousandsGroupStyle: 'thousand'
+          numeralThousandsGroupStyle: 'thousand',
+          numeralDecimalScale: 2,
+          numeralDecimalMark: '.',
+          numeralPositiveOnly: true
         });
 
         const targetAmount = new Cleave('#target-amount', {
           numeral: true,
-          numeralThousandsGroupStyle: 'thousand'
+          numeralThousandsGroupStyle: 'thousand',
+          numeralDecimalScale: 2,
+          numeralDecimalMark: '.',
+          numeralPositiveOnly: true
         });
 
 

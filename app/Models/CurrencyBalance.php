@@ -59,10 +59,11 @@ class CurrencyBalance extends Model
 
     /**
      * Get total balance in USD equivalent.
+     * Using December 2024 approximate exchange rates.
      */
     public function getTotalBalanceAttribute(): float
     {
-        // Simple conversion - in production, use real exchange rates
-        return (float) $this->USD + ((float) $this->EUR * 1.09) + ((float) $this->NGN * 0.0026);
+        // Using December 2024 approximate rates: EUR to USD = 1.05, NGN to USD = 0.000625
+        return (float) $this->USD + ((float) $this->EUR * 1.05) + ((float) $this->NGN * 0.000625);
     }
 }
