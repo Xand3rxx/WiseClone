@@ -97,4 +97,3 @@ if (typeof KTUtil !== 'undefined' && KTUtil.onDOMContentLoaded) {
     // DOM is already ready
     KTTransactionsTable.init();
 }
-
