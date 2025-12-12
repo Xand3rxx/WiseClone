@@ -2,7 +2,7 @@
     <div class="row mb-5">
         <div class="col">
             <label class="form-label fw-bolder fs-6 text-gray-700">Amount to be transfered</label>
-            <input type="text" class="form-control form-control-solid fs-1 @error('source_amount') is-invalid @enderror" placeholder="0.50" min="0.01" step="0.01" data-symbol="{{ $sourceCurrency['symbol'] }}" name="source_amount" data-max="{{ $sourceCurrencyBalance }}" max="{{ $sourceCurrencyBalance }}" id="source-amount" value="{{ old('source_amount') }}" autocomplete="off">
+            <input type="text" class="form-control form-control-solid fs-1 @error('source_amount') is-invalid @enderror" placeholder="0.50" min="0.01" step="0.01" data-symbol="{{ $sourceCurrency['symbol'] }}" name="source_amount" data-max="{{ $sourceCurrencyBalance }}" max="{{ $sourceCurrencyBalance }}" id="source-amount" value="{{ old('source_amount') ?? number_format((float)$sourceCurrencyBalance, 2, '.', '') }}" autocomplete="off">
             @error('source_amount')
                 <x-alert :message="$message" />
             @enderror
