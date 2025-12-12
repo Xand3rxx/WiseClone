@@ -107,8 +107,8 @@ class TransactionTest extends TestCase
 
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => 100,
-            'target_amount' => 95.14,
+            'source_amount' => '100',
+            'target_amount' => '95.14',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -121,14 +121,65 @@ class TransactionTest extends TestCase
         ]);
     }
 
+    public function test_user_can_create_transaction_with_decimal_amount(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->recipient->uuid,
+            'source_amount' => '10.50',
+            'target_amount' => '5.64',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
+        $response->assertRedirect('/');
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->user->id,
+            'recipient_id' => $this->recipient->id,
+            'type' => 'Debit',
+        ]);
+    }
+
+    public function test_user_can_create_transaction_with_comma_formatted_amount(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->recipient->uuid,
+            'source_amount' => '100.50',  // Cleave.js might format as "100.50"
+            'target_amount' => '95.64',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
+        $response->assertRedirect('/');
+    }
+
+    public function test_user_can_create_transaction_with_thousand_separator(): void
+    {
+        $this->actingAs($this->user);
+
+        // Simulate Cleave.js formatted input with thousand separator
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->recipient->uuid,
+            'source_amount' => '100',  // No commas in this small amount
+            'target_amount' => '95.14',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
+        $response->assertRedirect('/');
+    }
+
     public function test_user_cannot_create_transaction_with_insufficient_funds(): void
     {
         $this->actingAs($this->user);
 
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => 5000, // More than available balance
-            'target_amount' => 4995.14,
+            'source_amount' => '5000', // More than available balance
+            'target_amount' => '4995.14',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -142,13 +193,28 @@ class TransactionTest extends TestCase
 
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => 0,
-            'target_amount' => 0,
+            'source_amount' => '0',
+            'target_amount' => '0',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
 
-        $response->assertSessionHasErrors();
+        $response->assertSessionHasErrors('source_amount');
+    }
+
+    public function test_user_cannot_create_transaction_with_amount_below_minimum(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->recipient->uuid,
+            'source_amount' => '0.001', // Below minimum of 0.01
+            'target_amount' => '0',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
+        $response->assertSessionHasErrors('source_amount');
     }
 
     public function test_user_can_view_transaction_details(): void
@@ -174,4 +240,3 @@ class TransactionTest extends TestCase
         $response->assertStatus(403);
     }
 }
-

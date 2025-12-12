@@ -68,8 +68,8 @@ class TransactionController extends Controller
         }
 
         // Validate minimum amount
-        if ($amount < 1.0) {
-            return back()->with('error', "Sorry! The source amount cannot be less than {$currency->symbol}1.");
+        if ($amount < 0.01) {
+            return back()->with('error', "Sorry! The source amount cannot be less than {$currency->symbol}0.01.");
         }
 
         // Calculate the target amount to be sent to recipient
@@ -184,7 +184,7 @@ class TransactionController extends Controller
     {
         $charge = Charge::where('source_currency_id', $sourceCurrency->id)
             ->where('target_currency_id', $targetCurrency->id)
-            ->firstOrFail();
+        ->firstOrFail();
 
         $fixedFee = (float) $charge->fixed_fee;
         $variableFee = ($charge->variable_percentage / 100) * $sourceAmount;
@@ -244,8 +244,8 @@ class TransactionController extends Controller
     public function calculation(array $validated, float $amount): array
     {
         $charge = Charge::where('source_currency_id', $validated['source_currency_id'])
-            ->where('target_currency_id', $validated['target_currency_id'])
-            ->firstOrFail();
+        ->where('target_currency_id', $validated['target_currency_id'])
+        ->firstOrFail();
 
         $validated['user_id'] = auth()->id();
         $validated['recipient_id'] = User::where('uuid', $validated['recipient_uuid'])->firstOrFail()->id;
@@ -274,13 +274,33 @@ class TransactionController extends Controller
      */
     private function validateRequest(): array
     {
-        return request()->validate([
+        // Sanitize numeric inputs by removing commas (from Cleave.js formatting)
+        $request = request();
+        $request->merge([
+            'source_amount' => $this->sanitizeNumericInput($request->input('source_amount')),
+            'target_amount' => $this->sanitizeNumericInput($request->input('target_amount')),
+        ]);
+
+        return $request->validate([
             'recipient_uuid' => 'bail|required|string|exists:users,uuid',
             'source_amount' => 'bail|required|numeric|min:0.01|max:99999999.99',
             'target_amount' => 'bail|required|numeric|min:0|max:99999999.99',
             'source_currency_id' => 'bail|required|integer|exists:currencies,id',
             'target_currency_id' => 'bail|required|integer|exists:currencies,id',
         ]);
+    }
+
+    /**
+     * Sanitize numeric input by removing formatting characters.
+     */
+    private function sanitizeNumericInput(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        // Remove commas and other non-numeric characters except decimal point
+        return preg_replace('/[^\d.]/', '', $value);
     }
 
     /**
@@ -293,8 +313,8 @@ class TransactionController extends Controller
         }
 
         $filters = $request->only('source_currency_id');
-        $sourceCurrency = Currency::findOrFail($filters['source_currency_id']);
-        $latestCurrencyBalance = auth()->user()->latestCurrencyBalance;
+            $sourceCurrency = Currency::findOrFail($filters['source_currency_id']);
+            $latestCurrencyBalance = auth()->user()->latestCurrencyBalance;
 
         if (!$latestCurrencyBalance) {
             return response()->json(['error' => 'No balance found'], 400);
@@ -302,10 +322,10 @@ class TransactionController extends Controller
 
         $sourceAmount = $latestCurrencyBalance->getBalanceForCurrency($sourceCurrency->code);
 
-        return [
+            return [
             'sourceCurrency' => $sourceCurrency,
             'sourceCurrencyBalance' => $sourceAmount,
-        ];
+            ];
     }
 
     /**

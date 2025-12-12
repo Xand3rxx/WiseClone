@@ -31,7 +31,7 @@
     <div class="separator separator-dashed"></div>
     <label class="form-check form-switch form-switch-sm form-check-custom form-check-solid flex-stack">
         <span class="form-check-label ms-0 fw-bolder fs-4 text-gray-700">Recipient Gets</span>
-        <input type="text" name="target_amount" class="text-end form-control form-control-solid fs-1 @error('target_amount') is-invalid @enderror" min="1" data-symbol="{{ $targetCurrency['symbol'] }}" id="target-amount" value="{{ old('target_amount') ?? !empty($targetAmount) ? $targetAmount : 0 }}" style="width: 50% !important" readonly>
+        <input type="text" name="target_amount" class="text-end form-control form-control-solid fs-1 @error('target_amount') is-invalid @enderror" min="0" step="0.01" data-symbol="{{ $targetCurrency['symbol'] }}" id="target-amount" value="{{ old('target_amount') ?? !empty($targetAmount) ? $targetAmount : 0 }}" style="width: 50% !important" readonly>
     </label>
     <div class="separator separator-dashed"></div>
 </div>
