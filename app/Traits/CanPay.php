@@ -5,19 +5,81 @@ namespace App\Traits;
 trait CanPay
 {
     /**
-     * Determine and verify if transactions can be made
-     * Return true if amount is greater than the available currency balance
-     * Return true if available currency balance is equal to zero
+     * Determine if the authenticated user can make a payment.
      *
-     * @param string $code
-     * @param float $amount
+     * Returns TRUE if the user has sufficient funds.
+     * Returns FALSE if insufficient balance or balance is zero.
      *
-     * @return bool true|false
+     * @param string $currencyCode The currency code (USD, EUR, NGN)
+     * @param float $amount The amount to pay
+     * @return bool True if payment can be made, false otherwise
      */
-    public function canMakePayment($code, $amount)
+    public function canMakePayment(string $currencyCode, float $amount): bool
     {
-        $latestCurrencyBalance = auth()->user()->latestCurrencyBalance;
+        $user = auth()->user();
 
-        return(($amount > $latestCurrencyBalance[$code] || $latestCurrencyBalance[$code] == 0.0) ? true : false);
+        if (!$user) {
+            return false;
+        }
+
+        $latestCurrencyBalance = $user->latestCurrencyBalance;
+
+        if (!$latestCurrencyBalance) {
+            return false;
+        }
+
+        $availableBalance = $latestCurrencyBalance->getBalanceForCurrency($currencyCode);
+
+        // User can pay if:
+        // 1. Available balance is greater than zero
+        // 2. Amount requested is less than or equal to available balance
+        return $availableBalance > 0 && $amount <= $availableBalance;
+    }
+
+    /**
+     * Get the available balance for a specific currency.
+     *
+     * @param string $currencyCode The currency code (USD, EUR, NGN)
+     * @return float The available balance
+     */
+    public function getAvailableBalance(string $currencyCode): float
+    {
+        $user = auth()->user();
+
+        if (!$user) {
+            return 0.0;
+        }
+
+        $latestCurrencyBalance = $user->latestCurrencyBalance;
+
+        if (!$latestCurrencyBalance) {
+            return 0.0;
+        }
+
+        return $latestCurrencyBalance->getBalanceForCurrency($currencyCode);
+    }
+
+    /**
+     * Check if the user has any balance in any currency.
+     *
+     * @return bool True if user has any balance
+     */
+    public function hasAnyBalance(): bool
+    {
+        $user = auth()->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        $latestCurrencyBalance = $user->latestCurrencyBalance;
+
+        if (!$latestCurrencyBalance) {
+            return false;
+        }
+
+        return (float) $latestCurrencyBalance->USD > 0 ||
+               (float) $latestCurrencyBalance->EUR > 0 ||
+               (float) $latestCurrencyBalance->NGN > 0;
     }
 }

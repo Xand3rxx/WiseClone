@@ -2,95 +2,107 @@
 
 namespace Database\Seeders;
 
+use App\Models\Charge;
+use App\Models\Currency;
 use Illuminate\Database\Seeder;
 
 class ChargeSeeder extends Seeder
 {
     /**
      * Run the database seeds.
-     *
-     * @return void
      */
-    public function run()
+    public function run(): void
     {
-        $currencies = self::charges();
+        $charges = $this->getCharges();
 
-        foreach ($currencies as $currency) {
-            \App\Models\Charge::create([
-                'source_currency_id'    => $currency['source_currency_id'],
-                'target_currency_id'    => $currency['target_currency_id'],
-                'rate'                  => $currency['rate'],
-                'variable_percentage'   => $currency['variable_percentage'],
-                'fixed_fee'            => $currency['fixed_fee'],
-            ]);
+        foreach ($charges as $charge) {
+            Charge::updateOrCreate(
+                [
+                    'source_currency_id' => $charge['source_currency_id'],
+                    'target_currency_id' => $charge['target_currency_id'],
+                ],
+                $charge
+            );
         }
+
+        $this->command->info('Currency charges/rates seeded: ' . count($charges) . ' combinations');
     }
 
-    public static function charges()
+    /**
+     * Get the charge configurations.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getCharges(): array
     {
         return [
+            // EUR conversions
             [
-                'source_currency_id'    => 1,  // EUR to EUR charge
-                'target_currency_id'    => 1,
-                'rate'                  => 1,
-                'variable_percentage'   => 0,
-                'fixed_fee'             => 0.41,
+                'source_currency_id' => 1,  // EUR to EUR
+                'target_currency_id' => 1,
+                'rate' => 1.0,
+                'variable_percentage' => 0,
+                'fixed_fee' => 0.41,
             ],
             [
-                'source_currency_id'    => 1, // EUR to NIG charge
-                'target_currency_id'    => 2,
-                'rate'                  => 424.472,
-                'variable_percentage'   => 0.57,
-                'fixed_fee'             => 0.71,
+                'source_currency_id' => 1,  // EUR to NGN
+                'target_currency_id' => 2,
+                'rate' => 1650.50,  // Updated realistic rate
+                'variable_percentage' => 0.57,
+                'fixed_fee' => 0.71,
             ],
             [
-                'source_currency_id'    => 1, // EUR to USD charge
-                'target_currency_id'    => 3,
-                'rate'                  => 1.09415,
-                'variable_percentage'   => 0.41,
-                'fixed_fee'             => 0.58,
+                'source_currency_id' => 1,  // EUR to USD
+                'target_currency_id' => 3,
+                'rate' => 1.085,  // Updated realistic rate
+                'variable_percentage' => 0.41,
+                'fixed_fee' => 0.58,
+            ],
+
+            // NGN conversions
+            [
+                'source_currency_id' => 2,  // NGN to EUR
+                'target_currency_id' => 1,
+                'rate' => 0.000606,  // Updated realistic rate
+                'variable_percentage' => 0.55,
+                'fixed_fee' => 500.00,
             ],
             [
-                'source_currency_id'    => 2, // NIG to EUR charge
-                'target_currency_id'    => 1,
-                'rate'                  => 0.00235501,
-                'variable_percentage'   => 0.55,
-                'fixed_fee'             => 118.56,
+                'source_currency_id' => 2,  // NGN to NGN
+                'target_currency_id' => 2,
+                'rate' => 1.0,
+                'variable_percentage' => 0,
+                'fixed_fee' => 250.00,
             ],
             [
-                'source_currency_id'    => 2, // NIG to NIG charge
-                'target_currency_id'    => 2,
-                'rate'                  => 1,
-                'variable_percentage'   => 0,
-                'fixed_fee'             => 231.44,
+                'source_currency_id' => 2,  // NGN to USD
+                'target_currency_id' => 3,
+                'rate' => 0.000658,  // Updated realistic rate
+                'variable_percentage' => 0.55,
+                'fixed_fee' => 400.00,
+            ],
+
+            // USD conversions
+            [
+                'source_currency_id' => 3,  // USD to EUR
+                'target_currency_id' => 1,
+                'rate' => 0.922,  // Updated realistic rate
+                'variable_percentage' => 0.42,
+                'fixed_fee' => 4.67,
             ],
             [
-                'source_currency_id'    => 2, // NIG to USD charge
-                'target_currency_id'    => 3,
-                'rate'                  => 0.00257732,
-                'variable_percentage'   => 0.55,
-                'fixed_fee'             => 97.88,
+                'source_currency_id' => 3,  // USD to NGN
+                'target_currency_id' => 2,
+                'rate' => 1520.00,  // Updated realistic rate
+                'variable_percentage' => 0.59,
+                'fixed_fee' => 5.01,
             ],
             [
-                'source_currency_id'    => 3, // USD to EUR charge
-                'target_currency_id'    => 1,
-                'rate'                  => 0.91405,
-                'variable_percentage'   => 0.42,
-                'fixed_fee'             => 4.67,
-            ],
-            [
-                'source_currency_id'    => 3, // USD to NIG charge
-                'target_currency_id'    => 2,
-                'rate'                  => 388,
-                'variable_percentage'   => 0.59,
-                'fixed_fee'             => 5.01,
-            ],
-            [
-                'source_currency_id'    => 3, // USD to USD charge
-                'target_currency_id'    => 3,
-                'rate'                  => 1,
-                'variable_percentage'   => 0,
-                'fixed_fee'             => 4.86,
+                'source_currency_id' => 3,  // USD to USD
+                'target_currency_id' => 3,
+                'rate' => 1.0,
+                'variable_percentage' => 0,
+                'fixed_fee' => 4.86,
             ],
         ];
     }

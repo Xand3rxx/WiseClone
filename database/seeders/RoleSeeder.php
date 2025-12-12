@@ -9,16 +9,21 @@ class RoleSeeder extends Seeder
 {
     /**
      * Run the database seeds.
-     *
-     * @return void
      */
-    public function run()
+    public function run(): void
     {
-        foreach(['administrator', 'customer'] as $role) {
-            Role::create([
-                'name'  => $role,
-                'url'   => $role,
-            ]);
+        $roles = [
+            ['name' => 'administrator', 'url' => 'administrator'],
+            ['name' => 'customer', 'url' => 'customer'],
+        ];
+
+        foreach ($roles as $role) {
+            Role::updateOrCreate(
+                ['name' => $role['name']],
+                $role
+            );
         }
+
+        $this->command->info('Roles seeded: administrator, customer');
     }
 }

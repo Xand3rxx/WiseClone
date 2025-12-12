@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\TransactionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -10,25 +11,38 @@ use App\Http\Controllers\TransactionController;
 |--------------------------------------------------------------------------
 |
 | Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "web" middleware group. Make something great!
 |
 */
 
+// Authentication routes
 Auth::routes([
-    'login'    => true,
+    'login' => true,
     'register' => true,
-    'logout'   => true,
-    'reset'    => false,  // For resetting passwords
-    'confirm'  => false,  // For additional password confirmations
-    'verify'   => false,  // For email verification
+    'logout' => true,
+    'reset' => false,
+    'confirm' => false,
+    'verify' => false,
 ]);
 
-Route::group(['middleware' => ['auth']], function () {
-    Route::get('/', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
-    Route::get('fund-account', [App\Http\Controllers\HomeController::class, 'fundAccount'])->name('fund_account');
+// Protected routes
+Route::middleware(['auth'])->group(function () {
+    // Dashboard
+    Route::get('/', [HomeController::class, 'index'])->name('home');
 
-    Route::post('transaction/source-converter',  [TransactionController::class, 'sourceConverter'])->name('transaction.source_converter');
-    Route::post('transaction/currency-balance',  [TransactionController::class, 'currencyBalance'])->name('transaction.currency_balance');
-    Route::resource('transaction',  TransactionController::class);
+    // Account funding
+    Route::get('fund-account', [HomeController::class, 'fundAccount'])->name('fund_account');
+
+    // Transaction routes
+    Route::post('transaction/source-converter', [TransactionController::class, 'sourceConverter'])
+        ->name('transaction.source_converter');
+    Route::post('transaction/currency-balance', [TransactionController::class, 'currencyBalance'])
+        ->name('transaction.currency_balance');
+    Route::resource('transaction', TransactionController::class);
+});
+
+// Health check endpoint
+Route::get('/up', function () {
+    return response()->json(['status' => 'ok', 'timestamp' => now()->toIso8601String()]);
 });

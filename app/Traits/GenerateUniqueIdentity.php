@@ -2,68 +2,91 @@
 
 namespace App\Traits;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
 trait GenerateUniqueIdentity
 {
-    protected $random;
-    protected $exist;
-    protected $tested;
-    protected $tableName;
-    protected $columnName;
-    protected $abbr;
-    protected $unique;
-
     /**
-     * Generate Reference Number for Payments Table
+     * Generate a unique reference number for a table.
      *
-     * @param string $tableName|NULL
-     * @param int $stringLength|13
-     *
-     * @return string
+     * @param string|null $tableName The table name to check uniqueness against
+     * @param int $stringLength The length of the reference string
+     * @return string The unique reference
      */
-    public static function generateReference(string $tableName = null, int $stringLength = 13)
+    public static function generateReference(?string $tableName = null, int $stringLength = 13): string
     {
-        return static::uniqueReference($tableName, $stringLength);
+        return self::uniqueReference($tableName ?? 'transactions', $stringLength);
     }
 
     /**
-     * Create reference number for payment
+     * Create a unique reference number.
      *
-     * @param string|NULL $tableName|NULL
-     * @param int $stringLength|13
-     *
-     * @return string
+     * @param string $tableName The table name to check uniqueness against
+     * @param int $stringLength The length of the reference string
+     * @return string The unique reference
      */
-    protected static function uniqueReference(string $tableName = null, int $stringLength = 13)
+    protected static function uniqueReference(string $tableName, int $stringLength): string
     {
-        // Store tested results in array to not test them again
         $tested = [];
+        $maxAttempts = 100;
+        $attempts = 0;
 
         do {
-            // Generate random characters of $stringLength or 13
-            $random = \Illuminate\Support\Str::random($stringLength);
-            // Check if it's already testing
-            // If so, don't query the database again
-            if (in_array($random, $tested)) {
+            $attempts++;
+
+            // Safety check to prevent infinite loops
+            if ($attempts > $maxAttempts) {
+                throw new \RuntimeException("Unable to generate unique reference after {$maxAttempts} attempts");
+            }
+
+            // Generate random string with timestamp prefix for better uniqueness
+            $random = strtoupper(Str::random($stringLength));
+
+            // Skip if already tested
+            if (in_array($random, $tested, true)) {
                 continue;
             }
 
-            // Check if it is unique in the database
-            $exist = \Illuminate\Support\Facades\DB::table($tableName ?? 'payments')->where('reference', $random)->exists();
+            // Check if it exists in the database
+            $exists = DB::table($tableName)
+                ->where('reference', $random)
+                ->exists();
 
-            // Store the random characters in the tested array
-            // To keep track which ones are already tested
+            // Track tested values
             $tested[] = $random;
 
-            // String appears to be unique
-            if ($exist === false) {
-                // Set unique to true to break the loop
-                $unique = true;
+            // Return if unique
+            if (!$exists) {
+                return $random;
             }
+        } while (true);
+    }
 
-            // If unique is still false at this point it will just repeat all the steps until
-            // it has generated a random string of characters
-        } while (!$unique);
+    /**
+     * Generate a UUID v4.
+     *
+     * @return string The UUID
+     */
+    public static function generateUuid(): string
+    {
+        return (string) Str::uuid();
+    }
 
-        return $random;
+    /**
+     * Generate a prefixed reference (e.g., TXN-XXXXXXXXX).
+     *
+     * @param string $prefix The prefix to add
+     * @param string|null $tableName The table name to check uniqueness against
+     * @param int $stringLength The length of the random part
+     * @return string The prefixed reference
+     */
+    public static function generatePrefixedReference(
+        string $prefix,
+        ?string $tableName = null,
+        int $stringLength = 10
+    ): string {
+        $reference = self::uniqueReference($tableName ?? 'transactions', $stringLength);
+        return strtoupper($prefix) . '-' . $reference;
     }
 }

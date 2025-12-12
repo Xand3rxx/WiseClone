@@ -2,232 +2,270 @@
 
 namespace App\Models;
 
-use App\Models\CurrencyBalance;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Services\Transaction as TransactionService;
+use App\Traits\GenerateUniqueIdentity;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class Transaction extends Model
 {
     use SoftDeletes;
 
-    const STATUS = [
-        'Success'   => 'Success',
-        'Pending'   => 'Pending',
+    public const STATUS = [
+        'Success' => 'Success',
+        'Pending' => 'Pending',
         'Failed' => 'Failed',
     ];
 
-    const TYPE = [
-        'Debit'   => 'Debit',
-        'Credit'  => 'Credit',
+    public const TYPE = [
+        'Debit' => 'Debit',
+        'Credit' => 'Credit',
     ];
 
     protected $guarded = ['deleted_at', 'created_at', 'updated_at'];
 
     /**
-     * The attributes that should be cast.
+     * Get the attributes that should be cast.
      *
-     * @var array
+     * @return array<string, string>
      */
-    protected $casts = [
-        'meta_data' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'meta_data' => 'array',
+            'amount' => 'decimal:2',
+            'rate' => 'decimal:6',
+            'transfer_fee' => 'decimal:2',
+            'variable_fee' => 'decimal:2',
+            'fixed_fee' => 'decimal:2',
+        ];
+    }
 
     /**
      * Model event to trigger action on creating
      */
-    protected static function booted()
+    protected static function booted(): void
     {
-        static::creating(function ($transaction) {
+        static::creating(function (Transaction $transaction): void {
             // Generate unique uuid for a new transaction.
-            $transaction->uuid = (string) \Illuminate\Support\Str::uuid();
+            $transaction->uuid = (string) Str::uuid();
 
             // Generate a random unique transaction reference.
-            $transaction->reference = \App\Traits\GenerateUniqueIdentity::generateReference('transactions');
+            $transaction->reference = GenerateUniqueIdentity::generateReference('transactions');
         });
     }
 
     /**
-     * Store the newly created debit transaction
+     * Store the newly created transaction using double-entry accounting.
      *
-     * @param  array  $validated
-     * @param  float  $amount
-     *
-     * @return bool true|false
+     * @param array<string, mixed> $validated
      */
-    public static function doubleEntryRecord(array $validated, float $amount)
+    public static function doubleEntryRecord(array $validated, float $amount): bool
     {
-        // Set `transactionCreated` to false before DB transaction
-        (bool) $transactionCreated = false;
+        $transactionCreated = false;
 
-        DB::transaction(function () use ($validated, $amount, &$transactionCreated) {
+        DB::transaction(function () use ($validated, $amount, &$transactionCreated): void {
+            // Get latest currency balance of the validated user id
+            $user = User::where('id', $validated['user_id'])->firstOrFail();
+            $currencyBalance = $user->latestCurrencyBalance;
 
-            // Get latest currency balanace of the validated user id
-            $currencyBalance = User::where('id', $validated['user_id'])->firstOrFail()->latestCurrencyBalance;
-            // dump($validated['sign']);
-
-            $sign = str_replace('', '', $validated['sign']);
-            // dd($sign);
-
-            // Get the currency ID to be matched
-            (int) $currencyId = $validated['currency_id'];
-
-            // Record transaction
-            $transaction = Transaction::create([
-                'user_id'               => $validated['user_id'],
-                'recipient_id'          => $validated['recipient_id'],
-                'source_currency_id'    => $validated['source_currency_id'],
-                'target_currency_id'    => $validated['target_currency_id'],
-                'amount'                => self::removeComma($amount),
-                'rate'                  => $validated['rate'],
-                'transfer_fee'          => $validated['transferFee'],
-                'variable_fee'          => $validated['variableFee'],
-                'fixed_fee'             => $validated['fixedFee'],
-                'type'                  => self::TYPE[$validated['type']],
-                'status'                => self::STATUS['Success'],
-                'meta_data'             => $validated,
-            ]);
-
-            // Create a new currency balance record
-            if(auth()->id() == $validated['user_id']){
-                CurrencyBalance::create([
-                    'user_id'           => $validated['user_id'],
-                    'transaction_id'    => $transaction['id'],
-                    'USD'               => ($currencyId == 3) ? ($currencyBalance->USD - $amount) : $currencyBalance->USD,
-                    'EUR'               => ($currencyId == 1) ? ($currencyBalance->EUR - $amount) : $currencyBalance->EUR,
-                    'NGN'               => ($currencyId == 2) ? ($currencyBalance->NGN - $amount) : $currencyBalance->NGN,
-                ]);
-            }else{
-                CurrencyBalance::create([
-                    'user_id'           => $validated['user_id'],
-                    'transaction_id'    => $transaction['id'],
-                    'USD'               => ($currencyId == 3) ? ($currencyBalance->USD + $amount) : $currencyBalance->USD,
-                    'EUR'               => ($currencyId == 1) ? ($currencyBalance->EUR + $amount) : $currencyBalance->EUR,
-                    'NGN'               => ($currencyId == 2) ? ($currencyBalance->NGN + $amount) : $currencyBalance->NGN,
-                ]);
+            if (!$currencyBalance) {
+                throw new \RuntimeException('User has no currency balance record.');
             }
 
+            $currencyId = (int) $validated['currency_id'];
+            $isDebit = auth()->id() === $validated['user_id'];
 
-            // Return true if both DB transaction succeed
+            // Record transaction
+            $transaction = self::create([
+                'user_id' => $validated['user_id'],
+                'recipient_id' => $validated['recipient_id'],
+                'source_currency_id' => $validated['source_currency_id'],
+                'target_currency_id' => $validated['target_currency_id'],
+                'amount' => self::removeComma($amount),
+                'rate' => $validated['rate'],
+                'transfer_fee' => $validated['transferFee'],
+                'variable_fee' => $validated['variableFee'],
+                'fixed_fee' => $validated['fixedFee'],
+                'type' => self::TYPE[$validated['type']],
+                'status' => self::STATUS['Success'],
+                'meta_data' => $validated,
+            ]);
+
+            // Calculate new balances based on currency and transaction type
+            $newBalances = self::calculateNewBalances(
+                $currencyBalance,
+                $currencyId,
+                $amount,
+                $isDebit
+            );
+
+            // Create a new currency balance record
+            CurrencyBalance::create([
+                'user_id' => $validated['user_id'],
+                'transaction_id' => $transaction->id,
+                'USD' => $newBalances['USD'],
+                'EUR' => $newBalances['EUR'],
+                'NGN' => $newBalances['NGN'],
+            ]);
+
             $transactionCreated = true;
-
-        }, 3); // Try 3 times before reporting an error
+        }, 3);
 
         return $transactionCreated;
     }
 
     /**
-     * Record a failed transaction
+     * Calculate new balances after a transaction.
      *
-     * @param  array  $validated
-     * @param  float  $amount
-     * @param  string  $type
-     * @param  int  $user_id
-     * @param  int  $recipient_id
-     *
-     * @return \App\Model\Transaction|Null
+     * @return array<string, float>
      */
-    public static function failedTransaction(array $validated, float $amount, string $type, int $user_id, int $recipient_id)
-    {
-        Transaction::create([
-            'user_id'               => $user_id,
-            'recipient_id'          => $recipient_id,
-            'source_currency_id'    => $validated['source_currency_id'],
-            'target_currency_id'    => $validated['target_currency_id'],
-            'amount'                => self::removeComma($amount),
-            'rate'                  => $validated['rate'],
-            'transfer_fee'          => $validated['transferFee'],
-            'variable_fee'          => $validated['variableFee'],
-            'fixed_fee'             => $validated['fixedFee'],
-            'type'                  => $type,
-            'status'                => self::STATUS['Failed'],
-            'meta_data'             => $validated,
+    private static function calculateNewBalances(
+        CurrencyBalance $currentBalance,
+        int $currencyId,
+        float $amount,
+        bool $isDebit
+    ): array {
+        $currencyMap = [
+            1 => 'EUR',
+            2 => 'NGN',
+            3 => 'USD',
+        ];
+
+        $balances = [
+            'USD' => (float) $currentBalance->USD,
+            'EUR' => (float) $currentBalance->EUR,
+            'NGN' => (float) $currentBalance->NGN,
+        ];
+
+        $currency = $currencyMap[$currencyId] ?? 'USD';
+
+        if ($isDebit) {
+            $balances[$currency] -= $amount;
+        } else {
+            $balances[$currency] += $amount;
+        }
+
+        return $balances;
+    }
+
+    /**
+     * Record a failed transaction.
+     *
+     * @param array<string, mixed> $validated
+     */
+    public static function failedTransaction(
+        array $validated,
+        float $amount,
+        string $type,
+        int $userId,
+        int $recipientId
+    ): Transaction {
+        return self::create([
+            'user_id' => $userId,
+            'recipient_id' => $recipientId,
+            'source_currency_id' => $validated['source_currency_id'],
+            'target_currency_id' => $validated['target_currency_id'],
+            'amount' => self::removeComma($amount),
+            'rate' => $validated['rate'],
+            'transfer_fee' => $validated['transferFee'],
+            'variable_fee' => $validated['variableFee'],
+            'fixed_fee' => $validated['fixedFee'],
+            'type' => $type,
+            'status' => self::STATUS['Failed'],
+            'meta_data' => $validated,
         ]);
     }
 
     /**
-     * Remove comma from number format without removing decimal point
+     * Remove comma from number format without removing decimal point.
      */
-    public static function removeComma($value)
+    public static function removeComma(float|string $value): float
     {
-        return floatval(preg_replace('/[^\d.]/', '', $value));
+        if (is_float($value)) {
+            return $value;
+        }
+
+        return (float) preg_replace('/[^\d.]/', '', $value);
     }
 
     /**
-     * Format the amount value
+     * Format the amount value.
      */
-    public function amount()
+    public function amount(): string
     {
-        return number_format($this->amount, 2);
+        return number_format((float) $this->amount, 2);
     }
 
     /**
-     * Get the status of of a single transaction
+     * Get the status details of a transaction.
      */
-    public function status()
+    public function status(): object
     {
         return (new TransactionService)->status($this->status);
     }
 
     /**
-     * Get the type of transaction executed
+     * Get the type details of a transaction.
      */
-    public function type()
+    public function type(): object
     {
         return (new TransactionService)->type($this->type);
     }
 
     /**
-     * Get the sender associated with the transaction
+     * Get the sender associated with the transaction.
      */
-    public function user()
+    public function user(): BelongsTo
     {
-        return $this->hasOne(User::class, 'id', 'user_id');
+        return $this->belongsTo(User::class);
     }
 
     /**
-     * Get the recipient associated with the transaction
+     * Get the recipient associated with the transaction.
      */
-    public function recipient()
+    public function recipient(): BelongsTo
     {
-        return $this->hasOne(User::class, 'id', 'recipient_id');
+        return $this->belongsTo(User::class, 'recipient_id');
     }
 
     /**
-     * Get the sender associated with the transaction
+     * Get the source currency of the transaction.
      */
-    public function sourceCurrency()
+    public function sourceCurrency(): BelongsTo
     {
-        return $this->hasOne(Currency::class, 'id', 'source_currency_id');
+        return $this->belongsTo(Currency::class, 'source_currency_id');
     }
 
     /**
-     * Get the recipient associated with the transaction
+     * Get the target currency of the transaction.
      */
-    public function targetCurrency()
+    public function targetCurrency(): BelongsTo
     {
-        return $this->hasOne(Currency::class, 'id', 'target_currency_id');
+        return $this->belongsTo(Currency::class, 'target_currency_id');
     }
 
     /**
-     * Get the sequivalent currency transaction
+     * Get the currency balance record for this transaction.
      */
-    public function currencyBalance()
+    public function currencyBalance(): HasOne
     {
-        return $this->hasOne(CurrencyBalance::class, 'transaction_id');
+        return $this->hasOne(CurrencyBalance::class);
     }
 
-     /**
-     * Scope a query to get the transactions associated with the authenticated user.
+    /**
+     * Scope a query to get transactions for a specific user.
      *
      * @param \Illuminate\Database\Eloquent\Builder $query
      * @return \Illuminate\Database\Eloquent\Builder
      */
-    public function scopeTransactions($query, $id)
+    public function scopeForUser($query, int $userId)
     {
-        return $query->select('*')
-            ->where('user_id', $id)
-             ->orWhere('recipient_id', $id);
+        return $query->where('user_id', $userId)
+            ->orWhere('recipient_id', $userId);
     }
 }
