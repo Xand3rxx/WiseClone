@@ -157,13 +157,12 @@ function validateRequirements($currentValue, $sourceCurrencyId, $targetCurrencyI
         return;
     }
 
-    // If current value input field is 0 or is NaN, default to 1
-    if(parseFloat($currentValue) == 0 || isNaN($currentValue)){
-        displayMessage("Amount to be sent cannot be less than "+ $currencySymbol+ "1","error" );
-
+    // Minimum amount is 0.01
+    if(parseFloat($currentValue) < 0.01 || isNaN($currentValue)){
+        displayMessage("Amount to be sent cannot be less than "+ $currencySymbol+ "0.01","error" );
         ajaxConverter(parseFloat($currentValue), $sourceCurrencyId, $targetCurrencyId, $route);
         return;
-    }else{
+    } else {
         ajaxConverter(parseFloat($currentValue), $sourceCurrencyId, $targetCurrencyId, $route);
     }
 }
@@ -231,17 +230,24 @@ function ajaxConverter($currentValue, $sourceCurrencyId, $targetCurrencyId, $rou
 
 function formatAmount()
 {
-    // Numeral Formatting
+    // Numeral Formatting with decimal support
     const sourceAmount = new Cleave('#source-amount', {
         numeral: true,
-        numeralThousandsGroupStyle: 'hundred'
+        numeralThousandsGroupStyle: 'thousand',
+        numeralDecimalScale: 2,
+        numeralDecimalMark: '.',
+        numeralPositiveOnly: true
     });
 
     const targetAmount = new Cleave('#target-amount', {
         numeral: true,
-        numeralThousandsGroupStyle: 'thousand'
+        numeralThousandsGroupStyle: 'thousand',
+        numeralDecimalScale: 2,
+        numeralDecimalMark: '.',
+        numeralPositiveOnly: true
     });
 }
+
 /**
  * @description Display session message with Sweet Alert
  * @param string message
@@ -266,26 +272,3 @@ function displayMessage(message, type) {
         title: message,
     });
 }
-
-
-$.ajax({
-        url: $route,
-        method: 'POST',
-        data: {
-            _token: $('meta[name="csrf-token"]').attr('content'),
-            'dish_uuid': $currentValue,
-            'dish_qty': $sourceCurrencyId,
-        },
-        // Return the result
-        success: function (result) {
-            //Return toat notification
-        },
-        error: function (jqXHR, testStatus, error) {
-            // Display error message
-        },
-        timeout: 8000,
-});
-
-
-
-

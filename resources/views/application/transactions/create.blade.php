@@ -65,7 +65,7 @@
             <!--begin::Sidebar-->
             <div class="flex-lg-auto min-w-lg-300px col-5">
                 <div class="pb-5 fs-6">
-                    @if($user['latestCurrencyBalance']['USD'] == 0.0)
+                    @if($user['latestCurrencyBalance'] && $user['latestCurrencyBalance']['USD'] == 0.0)
                         <!--begin::Refund button-->
                         <div class="flex-shrink-0 p-4 p-lg-0 me-lg-2 mb-3">
                             <a href="{{ route('fund_account') }}" class="btn btn-sm btn-primary fw-bolder w-100 w-lg-auto">Refund Dollar Account</a>
@@ -98,9 +98,9 @@
                                     <!--begin::Table body-->
                                     <tbody class="fs-4 fw-bold text-gray-600">
                                         <tr>
-                                            <td>${{ number_format($user['latestCurrencyBalance']['USD'], 2) }}</td>
-                                            <td>€{{ number_format($user['latestCurrencyBalance']['EUR'], 2) }}</td>
-                                            <td>₦{{ number_format($user['latestCurrencyBalance']['NGN'], 2) }}</td>
+                                            <td>${{ number_format($user['latestCurrencyBalance']['USD'] ?? 0, 2) }}</td>
+                                            <td>€{{ number_format($user['latestCurrencyBalance']['EUR'] ?? 0, 2) }}</td>
+                                            <td>₦{{ number_format($user['latestCurrencyBalance']['NGN'] ?? 0, 2) }}</td>
                                         </tr>
                                     </tbody>
                                     <!--end::Table body-->
