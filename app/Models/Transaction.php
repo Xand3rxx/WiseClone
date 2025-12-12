@@ -123,6 +123,7 @@ class Transaction extends Model
      * Calculate new balances after a transaction.
      *
      * @return array<string, float>
+     * @throws \RuntimeException If debit would result in negative balance
      */
     private static function calculateNewBalances(
         CurrencyBalance $currentBalance,
@@ -145,9 +146,19 @@ class Transaction extends Model
         $currency = $currencyMap[$currencyId] ?? 'USD';
 
         if ($isDebit) {
-            $balances[$currency] -= $amount;
+            $newBalance = $balances[$currency] - $amount;
+            // Prevent negative balances
+            if ($newBalance < 0) {
+                throw new \RuntimeException("Insufficient {$currency} balance for this transaction.");
+            }
+            $balances[$currency] = $newBalance;
         } else {
             $balances[$currency] += $amount;
+        }
+
+        // Ensure no balance goes negative due to floating point errors
+        foreach ($balances as $key => $value) {
+            $balances[$key] = max(0, round($value, 2));
         }
 
         return $balances;

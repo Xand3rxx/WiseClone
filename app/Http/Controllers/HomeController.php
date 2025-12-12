@@ -47,6 +47,12 @@ class HomeController extends Controller
     public function fundAccount(): RedirectResponse
     {
         $user = auth()->user();
+
+        // Prevent admin users from funding accounts
+        if ($user->isAdmin()) {
+            return back()->with('error', 'Admin accounts cannot be funded.');
+        }
+
         $latestCurrencyBalance = $user->latestCurrencyBalance;
 
         // If no balance exists or USD balance is not zero, redirect back

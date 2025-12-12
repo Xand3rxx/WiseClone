@@ -38,14 +38,22 @@ class TransactionController extends Controller
     /**
      * Show the form for creating a new transaction.
      */
-    public function create(): View
+    public function create(): View|RedirectResponse
     {
         $user = auth()->user();
+
+        // Prevent admin users from creating transactions
+        if ($user->isAdmin()) {
+            return redirect()->route('home')
+                ->with('error', 'Admin accounts cannot create transactions. Please use a customer account.');
+        }
+
         $sourceCurrency = $user->currency;
         $latestBalance = $user->latestCurrencyBalance;
 
         if (!$latestBalance) {
-            abort(403, 'No currency balance found. Please contact support.');
+            return redirect()->route('home')
+                ->with('error', 'No currency balance found. Please contact support to set up your account.');
         }
 
         $sourceAmount = $latestBalance->getBalanceForCurrency($sourceCurrency->code);
@@ -62,6 +70,22 @@ class TransactionController extends Controller
         $amount = Transaction::removeComma($validated['source_amount']);
         $currency = Currency::findOrFail($validated['source_currency_id']);
 
+        // Prevent admin users from making transactions
+        if (auth()->user()->isAdmin()) {
+            return back()->with('error', 'Admin accounts cannot make transactions.');
+        }
+
+        // Prevent self-transfer
+        $recipient = User::where('uuid', $validated['recipient_uuid'])->first();
+        if ($recipient && $recipient->id === auth()->id()) {
+            return back()->with('error', 'Sorry! You cannot transfer money to yourself.');
+        }
+
+        // Check if recipient has a currency balance (required for credit)
+        if ($recipient && !$recipient->latestCurrencyBalance) {
+            return back()->with('error', 'Sorry! The recipient account is not properly set up. Please contact support.');
+        }
+
         // Check if user can make payment (has sufficient funds)
         if (!$this->canMakePayment($currency->code, $amount)) {
             return back()->with('error', "Oops! Your {$currency->name} account balance is insufficient to complete this transaction.");
@@ -74,6 +98,11 @@ class TransactionController extends Controller
 
         // Calculate the target amount to be sent to recipient
         $validated = $this->calculation($validated, $amount);
+
+        // Ensure amount after fees is positive
+        if ($validated['amountToConvert'] <= 0) {
+            return back()->with('error', 'The transfer amount is too small. The fees exceed the amount you want to send.');
+        }
 
         try {
             // Record first transaction for authenticated user (debit)

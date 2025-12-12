@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Tests\TestCase;
 
 class HomeTest extends TestCase
@@ -21,6 +22,9 @@ class HomeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Disable rate limiting for tests
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         // Create currencies
         Currency::create(['name' => 'Euro', 'code' => 'EUR', 'symbol' => '€']);
@@ -146,4 +150,3 @@ class HomeTest extends TestCase
         $response->assertSessionHas('info');
     }
 }
-

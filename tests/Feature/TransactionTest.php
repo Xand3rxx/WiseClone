@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Tests\TestCase;
 
 class TransactionTest extends TestCase
@@ -22,6 +23,9 @@ class TransactionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Disable rate limiting for tests
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         // Create currencies
         Currency::create(['name' => 'Euro', 'code' => 'EUR', 'symbol' => '€']);
@@ -238,5 +242,34 @@ class TransactionTest extends TestCase
         $response = $this->get("/transaction/{$transaction->uuid}");
 
         $response->assertStatus(403);
+    }
+
+    public function test_user_cannot_transfer_to_self(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->user->uuid, // Self-transfer
+            'source_amount' => '100',
+            'target_amount' => '95.14',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
+        $response->assertSessionHas('error');
+    }
+
+    public function test_admin_cannot_create_transaction(): void
+    {
+        // Create admin role and user
+        $adminRole = Role::find(1); // administrator
+        $adminUser = User::factory()->create(['role_id' => $adminRole->id]);
+
+        $this->actingAs($adminUser);
+
+        $response = $this->get('/transaction/create');
+
+        $response->assertRedirect('/');
+        $response->assertSessionHas('error');
     }
 }
