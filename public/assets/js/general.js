@@ -46,7 +46,7 @@ $('.close').click(function() {
 /**
  * @description Execute conversion from source amount on keyup
  */
-$(document).keyup('#source-amount', function(){
+$(document).on('keyup', '#source-amount', function(){
     // Variable declaration
     $sourceCurrency = $('#source-amount');
     $currentValue = removeComma($sourceCurrency.val());

@@ -60,8 +60,7 @@
 
     @if(Route::has('home'))
         <script src="{{ asset('assets/plugins/custom/datatables/datatables.bundle.js') }}"></script>
-        <script src="{{ asset('assets/js/custom/apps/user-management/users/list/table.js') }}"></script>
-        <script src="{{ asset('assets/js/custom/apps/customers/list/list.js') }}"></script>
+        <script src="{{ asset('assets/js/custom/transactions-table.js') }}"></script>
     @endif
     <!--end::Global Javascript Bundle-->
     <!--begin::Page Custom Javascript(used by this page)-->
