@@ -1,13 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Currency;
 use App\Models\CurrencyBalance;
+use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class TransactionSeeder extends Seeder
 {
@@ -21,10 +23,13 @@ class TransactionSeeder extends Seeder
         $ngnCurrency = Currency::where('code', 'NGN')->first();
 
         $adminUser = User::where('email', 'admin@wiseclone.com')->first();
-        $customers = User::where('role_id', 2)->get();
+        $customerRole = Role::where('name', 'customer')->first();
+        $customers = User::where('role_id', $customerRole->id)->get();
 
-        // Initial funding for all customers - give each $1000 USD
+        // Initial funding for demo accounts.
         $this->command->info('Creating initial funding transactions...');
+
+        $this->createInitialFunding($adminUser, $usdCurrency, $adminUser, 5000.00);
 
         foreach ($customers as $customer) {
             $this->createInitialFunding($customer, $usdCurrency, $adminUser);
@@ -45,11 +50,9 @@ class TransactionSeeder extends Seeder
     /**
      * Create initial funding for a customer.
      */
-    private function createInitialFunding(User $customer, Currency $usdCurrency, User $admin): void
+    private function createInitialFunding(User $customer, Currency $usdCurrency, User $admin, float $fundingAmount = 1000.00): void
     {
-        $fundingAmount = 1000.00;
-
-            $transaction = Transaction::create([
+        $transaction = Transaction::create([
             'user_id' => $customer->id,
             'recipient_id' => $admin->id,
             'source_currency_id' => $usdCurrency->id,
@@ -99,7 +102,8 @@ class TransactionSeeder extends Seeder
             100.00,
             $usdCurrency,
             $usdCurrency,
-            4.86,
+            1.00,
+            1.00,
             1.0,
             now()->subDays(5)
         );
@@ -111,8 +115,9 @@ class TransactionSeeder extends Seeder
             200.00,
             $usdCurrency,
             $eurCurrency,
-            5.51,
-            0.95,  // December 2024 USD to EUR rate
+            3.00,
+            2.50,
+            0.868075,
             now()->subDays(3)
         );
 
@@ -123,8 +128,9 @@ class TransactionSeeder extends Seeder
             150.00,
             $usdCurrency,
             $ngnCurrency,
-            5.90,
-            1600.00,  // December 2024 USD to NGN rate
+            3.025,
+            2.50,
+            1390.00,
             now()->subDays(1)
         );
 
@@ -135,7 +141,8 @@ class TransactionSeeder extends Seeder
             50.00,
             $usdCurrency,
             $usdCurrency,
-            4.86,
+            1.00,
+            1.00,
             1.0,
             now()->subDays(2)
         );
@@ -151,6 +158,7 @@ class TransactionSeeder extends Seeder
         Currency $sourceCurrency,
         Currency $targetCurrency,
         float $transferFee,
+        float $fixedFee,
         float $rate,
         $timestamp
     ): void {
@@ -166,8 +174,8 @@ class TransactionSeeder extends Seeder
             'amount' => $amount,
             'rate' => $rate,
             'transfer_fee' => $transferFee,
-            'variable_fee' => $transferFee - 4.86,
-            'fixed_fee' => 4.86,
+            'variable_fee' => $transferFee - $fixedFee,
+            'fixed_fee' => $fixedFee,
             'type' => Transaction::TYPE['Debit'],
             'status' => Transaction::STATUS['Success'],
             'created_at' => $timestamp,
@@ -207,8 +215,8 @@ class TransactionSeeder extends Seeder
             'amount' => $targetAmount,
             'rate' => $rate,
             'transfer_fee' => $transferFee,
-            'variable_fee' => $transferFee - 4.86,
-            'fixed_fee' => 4.86,
+            'variable_fee' => $transferFee - $fixedFee,
+            'fixed_fee' => $fixedFee,
             'type' => Transaction::TYPE['Credit'],
             'status' => Transaction::STATUS['Success'],
             'created_at' => $timestamp,
@@ -250,6 +258,7 @@ class TransactionSeeder extends Seeder
         Currency $sourceCurrency,
         Currency $targetCurrency,
         float $transferFee,
+        float $fixedFee,
         float $rate,
         $timestamp
     ): void {
@@ -264,8 +273,8 @@ class TransactionSeeder extends Seeder
             'amount' => $targetAmount,
             'rate' => $rate,
             'transfer_fee' => $transferFee,
-            'variable_fee' => 0,
-            'fixed_fee' => $transferFee,
+            'variable_fee' => $transferFee - $fixedFee,
+            'fixed_fee' => $fixedFee,
             'type' => Transaction::TYPE['Credit'],
             'status' => Transaction::STATUS['Success'],
             'created_at' => $timestamp,

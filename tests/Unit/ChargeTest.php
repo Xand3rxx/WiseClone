@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit;
 
 use App\Models\Charge;
@@ -12,6 +14,7 @@ class ChargeTest extends TestCase
     use RefreshDatabase;
 
     protected Currency $eurCurrency;
+
     protected Currency $usdCurrency;
 
     protected function setUp(): void
@@ -96,4 +99,3 @@ class ChargeTest extends TestCase
         $this->assertEquals(86.94, round($targetAmount, 2));
     }
 }
-

@@ -1,5 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Http\Controllers\AdminRateController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Auth;
@@ -23,16 +26,20 @@ Auth::routes([
     'logout' => true,
     'reset' => false,
     'confirm' => false,
-    'verify' => false,
+    'verify' => true,
 ]);
 
 // Protected routes
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('/', [HomeController::class, 'index'])->name('home');
 
+    // Admin rate management
+    Route::get('admin/rates', [AdminRateController::class, 'index'])->name('admin.rates.index');
+    Route::patch('admin/rates/{charge}', [AdminRateController::class, 'update'])->name('admin.rates.update');
+
     // Account funding (rate limited)
-    Route::get('fund-account', [HomeController::class, 'fundAccount'])
+    Route::post('fund-account', [HomeController::class, 'fundAccount'])
         ->middleware('throttle:6,1') // 6 requests per minute
         ->name('fund_account');
 
@@ -47,9 +54,4 @@ Route::middleware(['auth'])->group(function () {
     // Transaction resource routes
     Route::resource('transaction', TransactionController::class)
         ->middleware('throttle:30,1'); // 30 requests per minute
-});
-
-// Health check endpoint
-Route::get('/up', function () {
-    return response()->json(['status' => 'ok', 'timestamp' => now()->toIso8601String()]);
 });

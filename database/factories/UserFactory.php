@@ -1,14 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
+use App\Models\Currency;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\User>
+ * @extends Factory<User>
  */
 class UserFactory extends Factory
 {
@@ -25,8 +29,8 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'role_id' => 2, // Customer role
-            'currency_id' => 3, // USD currency
+            'role_id' => Role::where('name', 'customer')->value('id') ?? 2,
+            'currency_id' => Currency::where('code', 'USD')->value('id') ?? 3,
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
@@ -51,7 +55,7 @@ class UserFactory extends Factory
     public function admin(): static
     {
         return $this->state(fn (array $attributes) => [
-            'role_id' => 1,
+            'role_id' => Role::where('name', 'administrator')->value('id') ?? 1,
         ]);
     }
 
@@ -61,7 +65,7 @@ class UserFactory extends Factory
     public function customer(): static
     {
         return $this->state(fn (array $attributes) => [
-            'role_id' => 2,
+            'role_id' => Role::where('name', 'customer')->value('id') ?? 2,
         ]);
     }
 

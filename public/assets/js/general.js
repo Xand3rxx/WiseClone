@@ -4,7 +4,7 @@
  *
  * @returns modal view
  */
-$(document).on("click", "#transfer-details-modal", function (event) {
+$(document).on("click", ".transfer-details-modal", function (event) {
     event.preventDefault();
     $route = $(this).attr("data-url");
 
@@ -213,7 +213,7 @@ function ajaxConverter($currentValue, $sourceCurrencyId, $targetCurrencyId, $rou
         success: function (result) {
             setTimeout(() => {
                 // Clear and append new result
-                $("#transaction-breakdown").empty().html(result);
+                $("#transaction-breakdown").replaceWith(result);
                 formatAmount();
             }, 1000);
         },
@@ -230,16 +230,8 @@ function ajaxConverter($currentValue, $sourceCurrencyId, $targetCurrencyId, $rou
 
 function formatAmount()
 {
-    // Numeral Formatting with decimal support
+    // Numeral formatting with decimal support for the editable source amount.
     const sourceAmount = new Cleave('#source-amount', {
-        numeral: true,
-        numeralThousandsGroupStyle: 'thousand',
-        numeralDecimalScale: 2,
-        numeralDecimalMark: '.',
-        numeralPositiveOnly: true
-    });
-
-    const targetAmount = new Cleave('#target-amount', {
         numeral: true,
         numeralThousandsGroupStyle: 'thousand',
         numeralDecimalScale: 2,

@@ -1,22 +1,10 @@
 <div class="pb-5 fs-6">
     <!--begin::Details item-->
     <div class="fw-bolder mt-5">Transfer From</div>
-    <div class="text-gray-600">
-        @if ($transaction['type'] == 'Debit')
-            {{ !empty($transaction['user']['name']) ? $transaction['user']['name'] : 'Unavailable' }}
-        @else
-            {{ !empty($transaction['recipient']['full_name']) ? $transaction['recipient']['full_name'] : 'Unavailable' }}
-        @endif
-    </div>
+    <div class="text-gray-600">{{ $transaction->senderNameFor(auth()->id()) }}</div>
 
     <div class="fw-bolder mt-5">Transfer To</div>
-    <div class="text-gray-600">
-        @if ($transaction['type'] == 'Credit')
-            {{ !empty($transaction['user']['name']) ? $transaction['user']['name'] : 'Unavailable' }}
-        @else
-            {{ !empty($transaction['recipient']['full_name']) ? $transaction['recipient']['full_name'] : 'Unavailable' }}
-        @endif
-    </div>
+    <div class="text-gray-600">{{ $transaction->receiverNameFor(auth()->id()) }}</div>
 
     <div class="fw-bolder mt-5">Source Currency</div>
     <div class="text-gray-600">{{ !empty($transaction['sourceCurrency']['code']) ? $transaction['sourceCurrency']['code'] : ''}} - {{ !empty($transaction['sourceCurrency']['name']) ? $transaction['sourceCurrency']['name'] : 'Unavailable'}}</div>
@@ -37,7 +25,7 @@
     <div class="text-gray-600">{{ !empty($transaction['transfer_fee']) ? $transaction['transfer_fee'] : '0' }} {{ !empty($transaction['targetCurrency']['code']) ? $transaction['targetCurrency']['code'] : ''}}</div>
 
     <div class="fw-bolder mt-5">Variable Fee</div>
-    <div class="text-gray-600">{{ !empty($transaction['variable_fee']) ? $transaction['variable_fee'] : '0' }} {{ !empty($transaction['targetCurrency']['code']) ? $transaction['targetCurrency']['code'] : ''}} ({{ !empty($transaction['rate']) ? $transaction['rate'] : '0' }}%)</div>
+    <div class="text-gray-600">{{ !empty($transaction['variable_fee']) ? $transaction['variable_fee'] : '0' }} {{ !empty($transaction['sourceCurrency']['code']) ? $transaction['sourceCurrency']['code'] : ''}}</div>
 
     <div class="fw-bolder mt-5">Fixed Fee</div>
     <div class="text-gray-600">{{ !empty($transaction['fixed_fee']) ? $transaction['fixed_fee'] : '0' }}</div>

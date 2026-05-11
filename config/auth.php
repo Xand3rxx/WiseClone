@@ -1,5 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Models\User;
+
 return [
 
     /*
@@ -41,11 +45,6 @@ return [
             'provider' => 'users',
         ],
 
-        'api' => [
-            'driver' => 'token',
-            'provider' => 'users',
-            'hash' => false,
-        ],
     ],
 
     /*
@@ -68,7 +67,7 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => App\Models\User::class,
+            'model' => User::class,
         ],
 
         // 'users' => [

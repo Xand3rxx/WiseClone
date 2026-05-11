@@ -1,13 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Services\Transaction as TransactionService;
 use App\Traits\GenerateUniqueIdentity;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -62,7 +66,7 @@ class Transaction extends Model
     /**
      * Store the newly created transaction using double-entry accounting.
      *
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      */
     public static function doubleEntryRecord(array $validated, float $amount): bool
     {
@@ -73,12 +77,12 @@ class Transaction extends Model
             $user = User::where('id', $validated['user_id'])->firstOrFail();
             $currencyBalance = $user->latestCurrencyBalance;
 
-            if (!$currencyBalance) {
+            if (! $currencyBalance) {
                 throw new \RuntimeException('User has no currency balance record.');
             }
 
             $currencyId = (int) $validated['currency_id'];
-            $isDebit = auth()->id() === $validated['user_id'];
+            $isDebit = Auth::id() === $validated['user_id'];
 
             // Record transaction
             $transaction = self::create([
@@ -120,9 +124,102 @@ class Transaction extends Model
     }
 
     /**
+     * Atomically record both sides of a customer transfer.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    public static function recordTransfer(array $validated, float $sourceAmount): bool
+    {
+        return DB::transaction(function () use ($validated, $sourceAmount): bool {
+            $senderId = (int) $validated['user_id'];
+            $recipientId = (int) $validated['recipient_id'];
+            $targetAmount = (float) $validated['targetAmount'];
+
+            User::whereKey($senderId)->lockForUpdate()->firstOrFail();
+            User::whereKey($recipientId)->lockForUpdate()->firstOrFail();
+
+            $senderBalance = self::latestBalanceForUpdate($senderId);
+            $recipientBalance = self::latestBalanceForUpdate($recipientId);
+
+            if (! $senderBalance || ! $recipientBalance) {
+                throw new \RuntimeException('Both users must have a currency balance record.');
+            }
+
+            $debitBalances = self::calculateNewBalances(
+                $senderBalance,
+                (int) $validated['source_currency_id'],
+                $sourceAmount,
+                true
+            );
+
+            $debitTransaction = self::create([
+                'user_id' => $senderId,
+                'recipient_id' => $recipientId,
+                'source_currency_id' => $validated['source_currency_id'],
+                'target_currency_id' => $validated['target_currency_id'],
+                'amount' => self::removeComma($sourceAmount),
+                'rate' => $validated['rate'],
+                'transfer_fee' => $validated['transferFee'],
+                'variable_fee' => $validated['variableFee'],
+                'fixed_fee' => $validated['fixedFee'],
+                'type' => self::TYPE['Debit'],
+                'status' => self::STATUS['Success'],
+                'meta_data' => $validated,
+            ]);
+
+            CurrencyBalance::create([
+                'user_id' => $senderId,
+                'transaction_id' => $debitTransaction->id,
+                'USD' => $debitBalances['USD'],
+                'EUR' => $debitBalances['EUR'],
+                'NGN' => $debitBalances['NGN'],
+            ]);
+
+            $creditBalances = self::calculateNewBalances(
+                $recipientBalance,
+                (int) $validated['target_currency_id'],
+                $targetAmount,
+                false
+            );
+
+            $creditTransaction = self::create([
+                'user_id' => $recipientId,
+                'recipient_id' => $senderId,
+                'source_currency_id' => $validated['source_currency_id'],
+                'target_currency_id' => $validated['target_currency_id'],
+                'amount' => self::removeComma($targetAmount),
+                'rate' => $validated['rate'],
+                'transfer_fee' => $validated['transferFee'],
+                'variable_fee' => $validated['variableFee'],
+                'fixed_fee' => $validated['fixedFee'],
+                'type' => self::TYPE['Credit'],
+                'status' => self::STATUS['Success'],
+                'meta_data' => array_merge($validated, [
+                    'type' => 'Credit',
+                    'user_id' => $recipientId,
+                    'recipient_id' => $senderId,
+                    'currency_id' => $validated['target_currency_id'],
+                    'sign' => '+',
+                ]),
+            ]);
+
+            CurrencyBalance::create([
+                'user_id' => $recipientId,
+                'transaction_id' => $creditTransaction->id,
+                'USD' => $creditBalances['USD'],
+                'EUR' => $creditBalances['EUR'],
+                'NGN' => $creditBalances['NGN'],
+            ]);
+
+            return true;
+        }, 3);
+    }
+
+    /**
      * Calculate new balances after a transaction.
      *
      * @return array<string, float>
+     *
      * @throws \RuntimeException If debit would result in negative balance
      */
     private static function calculateNewBalances(
@@ -131,19 +228,13 @@ class Transaction extends Model
         float $amount,
         bool $isDebit
     ): array {
-        $currencyMap = [
-            1 => 'EUR',
-            2 => 'NGN',
-            3 => 'USD',
-        ];
-
         $balances = [
             'USD' => (float) $currentBalance->USD,
             'EUR' => (float) $currentBalance->EUR,
             'NGN' => (float) $currentBalance->NGN,
         ];
 
-        $currency = $currencyMap[$currencyId] ?? 'USD';
+        $currency = self::balanceColumnForCurrency($currencyId);
 
         if ($isDebit) {
             $newBalance = $balances[$currency] - $amount;
@@ -164,10 +255,29 @@ class Transaction extends Model
         return $balances;
     }
 
+    private static function latestBalanceForUpdate(int $userId): ?CurrencyBalance
+    {
+        return CurrencyBalance::where('user_id', $userId)
+            ->latest('created_at')
+            ->lockForUpdate()
+            ->first();
+    }
+
+    private static function balanceColumnForCurrency(int $currencyId): string
+    {
+        $code = Currency::findOrFail($currencyId)->code;
+
+        if (! in_array($code, ['USD', 'EUR', 'NGN'], true)) {
+            throw new \RuntimeException("Unsupported balance currency [{$code}].");
+        }
+
+        return $code;
+    }
+
     /**
      * Record a failed transaction.
      *
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      */
     public static function failedTransaction(
         array $validated,
@@ -210,6 +320,39 @@ class Transaction extends Model
     public function amount(): string
     {
         return number_format((float) $this->amount, 2);
+    }
+
+    /**
+     * Get the sender display name for the current viewer.
+     */
+    public function senderNameFor(?int $viewerId): string
+    {
+        $sender = $this->type === self::TYPE['Credit'] ? $this->recipient : $this->user;
+
+        return $this->participantNameFor($sender, $viewerId);
+    }
+
+    /**
+     * Get the receiver display name for the current viewer.
+     */
+    public function receiverNameFor(?int $viewerId): string
+    {
+        $receiver = $this->type === self::TYPE['Credit'] ? $this->user : $this->recipient;
+
+        return $this->participantNameFor($receiver, $viewerId);
+    }
+
+    private function participantNameFor(?User $participant, ?int $viewerId): string
+    {
+        if (! $participant) {
+            return 'Unavailable';
+        }
+
+        if ($viewerId !== null && $participant->id === $viewerId) {
+            return 'You';
+        }
+
+        return $participant->full_name ?: 'Unavailable';
     }
 
     /**
@@ -271,12 +414,14 @@ class Transaction extends Model
     /**
      * Scope a query to get transactions for a specific user.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @param  Builder  $query
+     * @return Builder
      */
     public function scopeForUser($query, int $userId)
     {
-        return $query->where('user_id', $userId)
-            ->orWhere('recipient_id', $userId);
+        return $query->where(function ($query) use ($userId): void {
+            $query->where('user_id', $userId)
+                ->orWhere('recipient_id', $userId);
+        });
     }
 }

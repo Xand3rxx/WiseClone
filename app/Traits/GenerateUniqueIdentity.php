@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Traits;
 
 use Illuminate\Support\Facades\DB;
@@ -10,8 +12,8 @@ trait GenerateUniqueIdentity
     /**
      * Generate a unique reference number for a table.
      *
-     * @param string|null $tableName The table name to check uniqueness against
-     * @param int $stringLength The length of the reference string
+     * @param  string|null  $tableName  The table name to check uniqueness against
+     * @param  int  $stringLength  The length of the reference string
      * @return string The unique reference
      */
     public static function generateReference(?string $tableName = null, int $stringLength = 13): string
@@ -22,8 +24,8 @@ trait GenerateUniqueIdentity
     /**
      * Create a unique reference number.
      *
-     * @param string $tableName The table name to check uniqueness against
-     * @param int $stringLength The length of the reference string
+     * @param  string  $tableName  The table name to check uniqueness against
+     * @param  int  $stringLength  The length of the reference string
      * @return string The unique reference
      */
     protected static function uniqueReference(string $tableName, int $stringLength): string
@@ -57,7 +59,7 @@ trait GenerateUniqueIdentity
             $tested[] = $random;
 
             // Return if unique
-            if (!$exists) {
+            if (! $exists) {
                 return $random;
             }
         } while (true);
@@ -76,9 +78,9 @@ trait GenerateUniqueIdentity
     /**
      * Generate a prefixed reference (e.g., TXN-XXXXXXXXX).
      *
-     * @param string $prefix The prefix to add
-     * @param string|null $tableName The table name to check uniqueness against
-     * @param int $stringLength The length of the random part
+     * @param  string  $prefix  The prefix to add
+     * @param  string|null  $tableName  The table name to check uniqueness against
+     * @param  int  $stringLength  The length of the random part
      * @return string The prefixed reference
      */
     public static function generatePrefixedReference(
@@ -87,6 +89,7 @@ trait GenerateUniqueIdentity
         int $stringLength = 10
     ): string {
         $reference = self::uniqueReference($tableName ?? 'transactions', $stringLength);
-        return strtoupper($prefix) . '-' . $reference;
+
+        return strtoupper($prefix).'-'.$reference;
     }
 }

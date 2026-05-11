@@ -25,23 +25,8 @@
             @foreach ($transactions as $transaction)
             <tr>
                 <td class="text-center">{{ $loop->iteration }}</td>
-                <td>
-                    @if ($transaction['type'] == 'Debit')
-                        {{-- {{ !empty($transaction['user']['name']) ? $transaction['user']['name'] : 'Unavailable' }} --}}
-                        You
-                    @else
-                        {{ !empty($transaction['recipient']['full_name']) ? $transaction['recipient']['full_name'] : 'Unavailable' }}
-                    @endif
-
-                </td>
-                <td>
-                    @if ($transaction['type'] == 'Credit')
-                        {{-- {{ !empty($transaction['user']['name']) ? $transaction['user']['name'] : 'Unavailable' }} --}}
-                        You
-                    @else
-                        {{ !empty($transaction['recipient']['full_name']) ? $transaction['recipient']['full_name'] : 'Unavailable' }}
-                    @endif
-                </td>
+                <td>{{ $transaction->senderNameFor(auth()->id()) }}</td>
+                <td>{{ $transaction->receiverNameFor(auth()->id()) }}</td>
                 <td class="text-center text-{{ $transaction->type()->signClass }}">{{$transaction->type()->sign}}{{ !empty($transaction['amount']) ? $transaction->amount() : '0' }}</td>
                 <td class="text-center">{{ !empty($transaction['sourceCurrency']['code']) ? $transaction['sourceCurrency']['code'] : 'Unavailable' }}</td>
                 <td class="text-center">{{ !empty($transaction['targetCurrency']['code']) ? $transaction['targetCurrency']['code'] : 'Unavailable' }}</td>
@@ -53,7 +38,7 @@
                 </td>
                 <td>{{ Carbon\Carbon::parse($transaction['created_at'], 'UTC')->isoFormat('MMMM Do YYYY, h:mm:ssa') }}</td>
                 <td class="text-end">
-                    <a data-url="{{ route('transaction.show', $transaction['uuid']) }}" class="btn btn-sm btn-primary fw-bolder w-100 w-lg-auto" data-bs-toggle="modal" data-bs-target="#transfer_details_modal" id="transfer-details-modal" title="View transaction details">Details</a>
+                    <a data-url="{{ route('transaction.show', $transaction['uuid']) }}" class="btn btn-sm btn-primary fw-bolder w-100 w-lg-auto transfer-details-modal" data-bs-toggle="modal" data-bs-target="#transfer_details_modal" title="View transaction details">Details</a>
                     </div>
                 </td>
             </tr>

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
 use App\Models\Charge;
@@ -17,6 +19,7 @@ class HomeTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Currency $usdCurrency;
 
     protected function setUp(): void
@@ -45,6 +48,7 @@ class HomeTest extends TestCase
         ]);
 
         // Create user
+        User::factory()->admin()->create(['email' => 'admin@wiseclone.com']);
         $this->user = User::factory()->create();
     }
 
@@ -107,7 +111,7 @@ class HomeTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/fund-account');
+        $response = $this->post('/fund-account');
 
         $response->assertRedirect('/transaction/create');
         $response->assertSessionHas('success');
@@ -144,7 +148,7 @@ class HomeTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/fund-account');
+        $response = $this->post('/fund-account');
 
         // Should redirect back with info message
         $response->assertSessionHas('info');

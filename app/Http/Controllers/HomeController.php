@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\Currency;
 use App\Models\CurrencyBalance;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -30,8 +33,9 @@ class HomeController extends Controller
                 ->latest()
                 ->take(500)
                 ->get()
-            : $user->transactions()
-                ->with(['recipient', 'sourceCurrency', 'targetCurrency'])
+            : Transaction::forUser($user->id)
+                ->with(['user', 'recipient', 'sourceCurrency', 'targetCurrency'])
+                ->latest()
                 ->take(200)
                 ->get();
 
@@ -56,7 +60,7 @@ class HomeController extends Controller
         $latestCurrencyBalance = $user->latestCurrencyBalance;
 
         // If no balance exists or USD balance is not zero, redirect back
-        if (!$latestCurrencyBalance) {
+        if (! $latestCurrencyBalance) {
             return back()->with('error', 'Unable to process request. Please contact support.');
         }
 
@@ -65,20 +69,20 @@ class HomeController extends Controller
         }
 
         $currency = Currency::where('code', 'USD')->firstOrFail();
+        $systemUser = User::whereHas('role', fn ($query) => $query->where('name', 'administrator'))->firstOrFail();
         $fundingAmount = 1000.00;
-        $fixedFee = 4.86;
 
-        // Credit the user with $1000
+        // Demo funding is a system credit with no transfer fee.
         $transaction = Transaction::create([
             'user_id' => $user->id,
-            'recipient_id' => 1, // Admin/System account
+            'recipient_id' => $systemUser->id,
             'source_currency_id' => $currency->id,
             'target_currency_id' => $currency->id,
             'amount' => $fundingAmount,
             'rate' => 1.0,
-            'transfer_fee' => $fixedFee,
+            'transfer_fee' => 0,
             'variable_fee' => 0,
-            'fixed_fee' => $fixedFee,
+            'fixed_fee' => 0,
             'type' => Transaction::TYPE['Credit'],
             'status' => Transaction::STATUS['Success'],
         ]);

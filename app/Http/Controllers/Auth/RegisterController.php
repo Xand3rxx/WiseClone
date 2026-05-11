@@ -1,16 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\CurrencyBalance;
 use App\Models\Currency;
+use App\Models\CurrencyBalance;
 use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 
 class RegisterController extends Controller
 {
@@ -47,7 +50,6 @@ class RegisterController extends Controller
     /**
      * Get a validator for an incoming registration request.
      *
-     * @param  array  $data
      * @return \Illuminate\Contracts\Validation\Validator
      */
     protected function validator(array $data)
@@ -55,20 +57,20 @@ class RegisterController extends Controller
         return Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'confirmed', Password::min(12)->mixedCase()->numbers()->symbols()->uncompromised()],
         ]);
     }
 
     /**
      * Create a new user instance after a valid registration.
      *
-     * @param  array  $data
-     * @return \App\Models\User
+     * @return User
      */
     protected function create(array $data)
     {
-        $currency = Currency::where('code', 'USD')->first();
-        $role = Role::where('name', 'customer')->first();
+        $currency = Currency::where('code', 'USD')->firstOrFail();
+        $role = Role::where('name', 'customer')->firstOrFail();
+        $systemUser = User::whereHas('role', fn ($query) => $query->where('name', 'administrator'))->firstOrFail();
         $fundingAmount = 1000;
 
         $user = User::create([
@@ -82,7 +84,7 @@ class RegisterController extends Controller
         // Credit a new user with $1000
         $transaction = Transaction::create([
             'user_id' => $user->id,
-            'recipient_id' => 1,
+            'recipient_id' => $systemUser->id,
             'source_currency_id' => $currency->id,
             'target_currency_id' => $currency->id,
             'amount' => $fundingAmount,

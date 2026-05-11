@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Currency;
@@ -76,8 +78,11 @@ class UserSeeder extends Seeder
         }
 
         // Generate additional random users using factory
-        User::factory(5)->create();
+        User::factory(5)->create([
+            'role_id' => $customerRole->id,
+            'currency_id' => $usdCurrency->id,
+        ]);
 
-        $this->command->info('Users seeded: 1 admin + ' . (count($demoUsers) + 6) . ' customers');
+        $this->command->info('Users seeded: 1 admin + '.(count($demoUsers) + 6).' customers');
     }
 }

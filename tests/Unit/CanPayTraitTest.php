@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit;
 
 use App\Models\Currency;
@@ -13,10 +15,11 @@ use Tests\TestCase;
 
 class CanPayTraitTest extends TestCase
 {
-    use RefreshDatabase;
     use CanPay;
+    use RefreshDatabase;
 
     protected User $user;
+
     protected Currency $usdCurrency;
 
     protected function setUp(): void
@@ -110,4 +113,3 @@ class CanPayTraitTest extends TestCase
         ]);
     }
 }
-

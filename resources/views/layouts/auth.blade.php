@@ -45,9 +45,9 @@
 
     <!--end::Global Javascript Bundle-->
     <!--begin::Page Custom Javascript(used by this page)-->
-    @if(Route::has('register'))
+    @if(request()->routeIs('register'))
         <script src="{{ asset('assets/js/custom/authentication/sign-up/general.js') }}"></script>
-    @else
+    @elseif(request()->routeIs('login'))
         <script src="{{ asset('assets/js/custom/authentication/sign-in/general.js') }}"></script>
     @endif
     <script>

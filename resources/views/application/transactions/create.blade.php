@@ -67,9 +67,10 @@
                 <div class="pb-5 fs-6">
                     @if($user['latestCurrencyBalance'] && $user['latestCurrencyBalance']['USD'] == 0.0)
                         <!--begin::Refund button-->
-                        <div class="flex-shrink-0 p-4 p-lg-0 me-lg-2 mb-3">
-                            <a href="{{ route('fund_account') }}" class="btn btn-sm btn-primary fw-bolder w-100 w-lg-auto">Refund Dollar Account</a>
-                        </div>
+                        <form method="POST" action="{{ route('fund_account') }}" class="flex-shrink-0 p-4 p-lg-0 me-lg-2 mb-3">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-primary fw-bolder w-100 w-lg-auto">Refund Dollar Account</button>
+                        </form>
                         <!--end::Refund button-->
                     @endif
 
@@ -113,7 +114,7 @@
                     </div>
                     <!--end::Body-->
 
-                <p class="fs-4 mb-4">This calculation is deduced from <strong>Wise</strong> provided on <a href=“https://wise.com/gb/pricing/send-money” target=“_blank”>Wise Fees For Sending Money</a> webpage.</p>
+                <p class="fs-4 mb-4">This calculation is deduced from <strong>Wise</strong> provided on <a href="https://wise.com/gb/pricing/send-money" target="_blank">Wise Fees For Sending Money</a> webpage.</p>
 
                     <div class="notice d-flex bg-light-warning rounded border-warning border border-dashed mb-9 p-6">
                         <!--begin::Icon-->
@@ -238,15 +239,6 @@
           numeralDecimalMark: '.',
           numeralPositiveOnly: true
         });
-
-        const targetAmount = new Cleave('#target-amount', {
-          numeral: true,
-          numeralThousandsGroupStyle: 'thousand',
-          numeralDecimalScale: 2,
-          numeralDecimalMark: '.',
-          numeralPositiveOnly: true
-        });
-
 
     </script>
 @endpush

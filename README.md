@@ -1,25 +1,25 @@
 # <img alt="WiseClone Logo" src="https://wise.com/public-resources/assets/logos/wise/brand_logo.svg" width="120"> WiseClone
 
-[![Laravel](https://img.shields.io/badge/Laravel-11.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
-[![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
+[![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.3+-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
-A modern money transfer application inspired by [Wise](https://www.wise.com) (formerly TransferWise). Built with Laravel 11, featuring real-time currency exchange rates, double-entry accounting, and a clean, intuitive interface.
+A modern money transfer application inspired by [Wise](https://www.wise.com) (formerly TransferWise). Built with Laravel 13, featuring multi-currency transfers, admin-managed rates and fees, atomic balance updates, and a clean fintech MVP interface.
 
 ## ✨ Features
 
--   🔐 **Secure Authentication** - User registration, login, and session management
+-   🔐 **Secure Authentication** - User registration, login, email verification, and encrypted session support
 -   💱 **Multi-Currency Support** - Transfer between USD, EUR, and NGN
--   📊 **Real-time Exchange Rates** - Integration with Currency Converter API
+-   📊 **Admin Rate Management** - Admin users can update exchange rates, variable fees, and fixed fees from the UI
 -   📝 **Transaction History** - Complete audit trail of all transfers
--   💰 **Double-Entry Accounting** - Accurate balance tracking for all users
--   👤 **Role-Based Access** - Admin and customer roles with different permissions
+-   💰 **Atomic Transfer Posting** - Debit and credit legs are recorded in one locked database transaction
+-   👤 **Role-Based Access** - Admin and customer roles; admins can manage rates and make transfers
 -   🐳 **Docker Ready** - Full Docker configuration for easy deployment
 -   ✅ **Comprehensive Tests** - Unit and feature tests included
 
 ## 📋 Requirements
 
--   PHP 8.2 or higher
+-   PHP 8.3 or higher
 -   Composer 2.x
 -   MySQL 8.0+ or MariaDB 10.x
 -   Node.js 18+ (for frontend assets)
@@ -93,6 +93,21 @@ Access the application at: http://localhost:8080 (Docker) or http://localhost:80
 | Admin | admin@wiseclone.com | password |
 | User  | user@wiseclone.com  | password |
 
+> Demo accounts are seeded for local development and interviews only. Replace seeded passwords and credentials before any real deployment.
+
+## 🧑‍💼 Admin Capabilities
+
+-   View and update exchange rates for all supported currency pairs.
+-   Update variable percentage fees and fixed fees without changing code.
+-   Make transfers from admin accounts when the admin has an available balance.
+-   View all transactions from the dashboard.
+
+Rate management is available at:
+
+```text
+/admin/rates
+```
+
 ## 🏗️ Project Structure
 
 ```
@@ -117,13 +132,15 @@ wiseclone/
 ## 🧪 Running Tests
 
 ```bash
-# Run all tests
+# Run all tests through the local Artisan wrapper
 php artisan test
 
-# Run with coverage
-php artisan test --coverage
+# Or use Composer scripts
+composer test
+composer lint
+composer fix
 
-# Run specific test suite
+# Run a specific test suite
 php artisan test --testsuite=Unit
 php artisan test --testsuite=Feature
 ```
@@ -189,11 +206,17 @@ _Detailed view of a completed transaction_
 ## 🔒 Security Features
 
 -   CSRF protection on all forms
+-   Email verification required for protected money routes
+-   POST-only funding action
+-   Admin-only rate management
+-   Atomic debit/credit posting with locked balance rows
 -   Password hashing with bcrypt
+-   Strong password validation for new registrations
 -   Input validation and sanitization
 -   SQL injection prevention via Eloquent ORM
 -   XSS protection with Blade templating
 -   Rate limiting on authentication routes
+-   Encrypted sessions by default
 
 ## 📝 API Endpoints
 
@@ -204,6 +227,9 @@ _Detailed view of a completed transaction_
 | GET    | `/transaction/create`           | New transaction form            |
 | POST   | `/transaction`                  | Create transaction              |
 | GET    | `/transaction/{uuid}`           | View transaction details        |
+| GET    | `/admin/rates`                  | Admin rate management           |
+| PATCH  | `/admin/rates/{charge}`         | Update a rate/fee pair          |
+
 
 ## 🤝 Contributing
 
@@ -225,4 +251,4 @@ This project is open-sourced software licensed under the [MIT license](https://o
 
 ---
 
-Made with ❤️ using Laravel 11
+Made with Laravel 13

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Traits;
 
 use Illuminate\Support\Facades\Http;
@@ -10,9 +12,9 @@ trait ExchangeRate
     /**
      * Get current exchange rate using external API.
      *
-     * @param string $sourceCurrency Source currency code
-     * @param string $targetCurrency Target currency code
-     * @param float $sourceAmount Source amount (not used in rate calculation)
+     * @param  string  $sourceCurrency  Source currency code
+     * @param  string  $targetCurrency  Target currency code
+     * @param  float  $sourceAmount  Source amount (not used in rate calculation)
      * @return float|null The exchange rate or null if unavailable
      */
     public static function currentExchangeRate(string $sourceCurrency, string $targetCurrency, float $sourceAmount): ?float
@@ -35,7 +37,7 @@ trait ExchangeRate
             $toCurrency = urlencode($targetCurrency);
             $query = "{$fromCurrency}_{$toCurrency}";
 
-            $response = Http::timeout(5)->get("https://free.currconv.com/api/v7/convert", [
+            $response = Http::timeout(5)->get('https://free.currconv.com/api/v7/convert', [
                 'q' => $query,
                 'compact' => 'ultra',
                 'apiKey' => $apiKey,
@@ -46,16 +48,18 @@ trait ExchangeRate
                     'status' => $response->status(),
                     'query' => $query,
                 ]);
+
                 return null;
             }
 
             $data = $response->json();
 
-            if (!isset($data[$query])) {
+            if (! isset($data[$query])) {
                 Log::warning('Currency API returned unexpected response', [
                     'response' => $data,
                     'query' => $query,
                 ]);
+
                 return null;
             }
 
@@ -68,6 +72,7 @@ trait ExchangeRate
                 'source' => $sourceCurrency,
                 'target' => $targetCurrency,
             ]);
+
             return null;
         }
     }
@@ -75,10 +80,10 @@ trait ExchangeRate
     /**
      * Get exchange rate with fallback to stored rate.
      *
-     * @param float $fallbackRate The fallback rate from database
-     * @param string $sourceCurrency Source currency code
-     * @param string $targetCurrency Target currency code
-     * @param float $sourceAmount Source amount
+     * @param  float  $fallbackRate  The fallback rate from database
+     * @param  string  $sourceCurrency  Source currency code
+     * @param  string  $targetCurrency  Target currency code
+     * @param  float  $sourceAmount  Source amount
      * @return float The exchange rate
      */
     public static function getExchangeRateWithFallback(

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit;
 
 use App\Models\Currency;
@@ -20,7 +22,7 @@ class UserTest extends TestCase
         Currency::create(['name' => 'Euro', 'code' => 'EUR', 'symbol' => '€']);
         Currency::create(['name' => 'Nigerian Naira', 'code' => 'NGN', 'symbol' => '₦']);
         Currency::create(['name' => 'US Dollar', 'code' => 'USD', 'symbol' => '$']);
-        
+
         // Create roles (required for foreign keys)
         Role::create(['name' => 'administrator', 'url' => 'administrator']);
         Role::create(['name' => 'customer', 'url' => 'customer']);

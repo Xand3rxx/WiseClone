@@ -1,6 +1,7 @@
 <?php
 
-use Illuminate\Http\Request;
+declare(strict_types=1);
+
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -14,15 +15,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-
 // Health check
 Route::get('/health', function () {
     return response()->json([
         'status' => 'ok',
         'timestamp' => now()->toIso8601String(),
-        'version' => app()->version(),
     ]);
 });

@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit;
 
 use App\Models\Currency;
-use App\Models\CurrencyBalance;
 use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
@@ -15,7 +16,9 @@ class TransactionModelTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected User $recipient;
+
     protected Currency $usdCurrency;
 
     protected function setUp(): void
@@ -177,5 +180,49 @@ class TransactionModelTest extends TestCase
 
         $this->assertEquals('Debit', $type->name);
         $this->assertEquals('-', $type->sign);
+    }
+
+    public function test_debit_transaction_display_names_mark_viewer_as_you(): void
+    {
+        $transaction = Transaction::create([
+            'user_id' => $this->user->id,
+            'recipient_id' => $this->recipient->id,
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+            'amount' => 100,
+            'rate' => 1.0,
+            'transfer_fee' => 4.86,
+            'variable_fee' => 0,
+            'fixed_fee' => 4.86,
+            'type' => 'Debit',
+            'status' => 'Success',
+        ]);
+
+        $this->assertEquals('You', $transaction->senderNameFor($this->user->id));
+        $this->assertEquals($this->recipient->full_name, $transaction->receiverNameFor($this->user->id));
+        $this->assertEquals($this->user->full_name, $transaction->senderNameFor($this->recipient->id));
+        $this->assertEquals('You', $transaction->receiverNameFor($this->recipient->id));
+    }
+
+    public function test_credit_transaction_display_names_mark_viewer_as_you(): void
+    {
+        $transaction = Transaction::create([
+            'user_id' => $this->recipient->id,
+            'recipient_id' => $this->user->id,
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+            'amount' => 100,
+            'rate' => 1.0,
+            'transfer_fee' => 4.86,
+            'variable_fee' => 0,
+            'fixed_fee' => 4.86,
+            'type' => 'Credit',
+            'status' => 'Success',
+        ]);
+
+        $this->assertEquals($this->user->full_name, $transaction->senderNameFor($this->recipient->id));
+        $this->assertEquals('You', $transaction->receiverNameFor($this->recipient->id));
+        $this->assertEquals('You', $transaction->senderNameFor($this->user->id));
+        $this->assertEquals($this->recipient->full_name, $transaction->receiverNameFor($this->user->id));
     }
 }

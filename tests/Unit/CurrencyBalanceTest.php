@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit;
 
 use App\Models\Currency;
@@ -15,6 +17,7 @@ class CurrencyBalanceTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Currency $usdCurrency;
 
     protected function setUp(): void
@@ -120,4 +123,3 @@ class CurrencyBalanceTest extends TestCase
         $this->assertEquals($transaction->id, $balance->transaction->id);
     }
 }
-

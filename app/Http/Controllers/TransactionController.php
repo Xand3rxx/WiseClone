@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\Charge;
@@ -11,18 +13,20 @@ use App\Traits\ExchangeRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class TransactionController extends Controller
 {
-    use ExchangeRate, CanPay;
+    use CanPay, ExchangeRate;
 
     /**
      * Display a listing of transactions.
      */
     public function index(): View
     {
-        $user = auth()->user();
+        /** @var User $user */
+        $user = Auth::user();
         $transactions = $user->isAdmin()
             ? Transaction::with(['user', 'recipient', 'sourceCurrency', 'targetCurrency'])
                 ->latest()
@@ -40,18 +44,13 @@ class TransactionController extends Controller
      */
     public function create(): View|RedirectResponse
     {
-        $user = auth()->user();
-
-        // Prevent admin users from creating transactions
-        if ($user->isAdmin()) {
-            return redirect()->route('home')
-                ->with('error', 'Admin accounts cannot create transactions. Please use a customer account.');
-        }
+        /** @var User $user */
+        $user = Auth::user();
 
         $sourceCurrency = $user->currency;
         $latestBalance = $user->latestCurrencyBalance;
 
-        if (!$latestBalance) {
+        if (! $latestBalance) {
             return redirect()->route('home')
                 ->with('error', 'No currency balance found. Please contact support to set up your account.');
         }
@@ -70,24 +69,19 @@ class TransactionController extends Controller
         $amount = Transaction::removeComma($validated['source_amount']);
         $currency = Currency::findOrFail($validated['source_currency_id']);
 
-        // Prevent admin users from making transactions
-        if (auth()->user()->isAdmin()) {
-            return back()->with('error', 'Admin accounts cannot make transactions.');
-        }
-
         // Prevent self-transfer
         $recipient = User::where('uuid', $validated['recipient_uuid'])->first();
-        if ($recipient && $recipient->id === auth()->id()) {
+        if ($recipient && $recipient->id === Auth::id()) {
             return back()->with('error', 'Sorry! You cannot transfer money to yourself.');
         }
 
         // Check if recipient has a currency balance (required for credit)
-        if ($recipient && !$recipient->latestCurrencyBalance) {
+        if ($recipient && ! $recipient->latestCurrencyBalance) {
             return back()->with('error', 'Sorry! The recipient account is not properly set up. Please contact support.');
         }
 
         // Check if user can make payment (has sufficient funds)
-        if (!$this->canMakePayment($currency->code, $amount)) {
+        if (! $this->canMakePayment($currency->code, $amount)) {
             return back()->with('error', "Oops! Your {$currency->name} account balance is insufficient to complete this transaction.");
         }
 
@@ -99,30 +93,26 @@ class TransactionController extends Controller
         // Calculate the target amount to be sent to recipient
         $validated = $this->calculation($validated, $amount);
 
+        if (abs((float) $validated['target_amount'] - round((float) $validated['targetAmount'], 2)) > 0.01) {
+            return back()->with('error', 'The quote changed before submission. Please review the latest amount and try again.');
+        }
+
         // Ensure amount after fees is positive
         if ($validated['amountToConvert'] <= 0) {
             return back()->with('error', 'The transfer amount is too small. The fees exceed the amount you want to send.');
         }
 
         try {
-            // Record first transaction for authenticated user (debit)
-            if (Transaction::doubleEntryRecord($validated, $amount)) {
-                // Alternate data for recipient transaction record (credit)
-                $recipientAmount = $validated['targetAmount'];
-                $validated = $this->alternateSourceRecord($validated);
-
-                // Record second transaction for recipient
-                if (Transaction::doubleEntryRecord($validated, $recipientAmount)) {
-                    return redirect()->route('home')
-                        ->with('success', 'Your transaction was successful');
-                }
+            if (Transaction::recordTransfer($validated, $amount)) {
+                return redirect()->route('home')
+                    ->with('success', 'Your transaction was successful');
             }
 
             return back()->with('error', 'Sorry! An error occurred while making the transfer.');
         } catch (\Exception $e) {
-            // Record double-entry failed transactions
-            Transaction::failedTransaction($validated, $amount, 'Debit', auth()->id(), $validated['recipient_id']);
-            Transaction::failedTransaction($validated, $validated['targetAmount'], 'Credit', $validated['recipient_id'], auth()->id());
+            // Record failed attempts without mutating balances.
+            Transaction::failedTransaction($validated, $amount, 'Debit', Auth::id(), $validated['recipient_id']);
+            Transaction::failedTransaction($validated, $validated['targetAmount'], 'Credit', $validated['recipient_id'], Auth::id());
 
             report($e);
 
@@ -141,8 +131,9 @@ class TransactionController extends Controller
             ->firstOrFail();
 
         // Ensure user can only view their own transactions
-        $user = auth()->user();
-        if (!$user->isAdmin() && $transaction->user_id !== $user->id && $transaction->recipient_id !== $user->id) {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $user->isAdmin() && $transaction->user_id !== $user->id && $transaction->recipient_id !== $user->id) {
             abort(403, 'Unauthorized to view this transaction.');
         }
 
@@ -178,7 +169,7 @@ class TransactionController extends Controller
      */
     public function sourceConverter(Request $request): View|JsonResponse|null
     {
-        if (!$request->ajax()) {
+        if (! $request->ajax()) {
             return response()->json(['error' => 'Invalid request'], 400);
         }
 
@@ -186,13 +177,14 @@ class TransactionController extends Controller
 
         // Validate input
         if (empty($filters['source_amount']) || $filters['source_amount'] === 'NaN') {
-            return null;
+            return response()->json(['error' => 'A valid source amount is required.'], 422);
         }
 
-        $user = auth()->user();
+        /** @var User $user */
+        $user = Auth::user();
         $latestCurrencyBalance = $user->latestCurrencyBalance;
 
-        if (!$latestCurrencyBalance) {
+        if (! $latestCurrencyBalance) {
             return response()->json(['error' => 'No balance found'], 400);
         }
 
@@ -213,21 +205,27 @@ class TransactionController extends Controller
     {
         $charge = Charge::where('source_currency_id', $sourceCurrency->id)
             ->where('target_currency_id', $targetCurrency->id)
-        ->firstOrFail();
+            ->firstOrFail();
 
         $fixedFee = (float) $charge->fixed_fee;
         $variableFee = ($charge->variable_percentage / 100) * $sourceAmount;
         $transferFee = $variableFee + $fixedFee;
         $amountToConvert = max(0, $sourceAmount - $transferFee);
-        $rate = (float) $charge->rate;
+        $rate = $this->getRate(
+            (float) $charge->rate,
+            $sourceCurrency->code,
+            $targetCurrency->code,
+            $sourceAmount
+        );
         $targetAmount = $amountToConvert * $rate;
 
-        $user = auth()->user();
+        /** @var User $user */
+        $user = Auth::user();
 
         return view($view, [
             'user' => $user,
-            'recipients' => User::where('role_id', 2)
-                ->where('id', '!=', $user->id)
+            'recipients' => User::whereKeyNot($user->id)
+                ->whereHas('latestCurrencyBalance')
                 ->orderBy('name')
                 ->get(),
             'currencies' => Currency::all(),
@@ -240,7 +238,7 @@ class TransactionController extends Controller
                 'transferFee' => number_format($transferFee, 2),
                 'amountToConvert' => number_format($amountToConvert, 2),
                 'fixedFee' => number_format($fixedFee, 2),
-                'variableFeeText' => number_format($variableFee, 2) . ' ' . $sourceCurrency->code . ' (' . $charge->variable_percentage . '%)',
+                'variableFeeText' => number_format($variableFee, 2).' '.$sourceCurrency->code.' ('.$charge->variable_percentage.'%)',
                 'variableFee' => number_format($variableFee, 2),
                 'rate' => $rate,
             ],
@@ -253,6 +251,7 @@ class TransactionController extends Controller
     public function getRate(float $rate, string $sourceCurrency, string $targetCurrency, float $sourceAmount): float
     {
         $currentRate = $this->currentExchangeRate($sourceCurrency, $targetCurrency, $sourceAmount);
+
         return $currentRate ?? $rate;
     }
 
@@ -267,20 +266,20 @@ class TransactionController extends Controller
     /**
      * Execute calculations and conversions.
      *
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
     public function calculation(array $validated, float $amount): array
     {
         $charge = Charge::where('source_currency_id', $validated['source_currency_id'])
-        ->where('target_currency_id', $validated['target_currency_id'])
-        ->firstOrFail();
+            ->where('target_currency_id', $validated['target_currency_id'])
+            ->firstOrFail();
 
-        $validated['user_id'] = auth()->id();
+        $validated['user_id'] = Auth::id();
         $validated['recipient_id'] = User::where('uuid', $validated['recipient_uuid'])->firstOrFail()->id;
-        $validated['variableFee'] = $this->getVariableFee($charge->variable_percentage, $amount);
+        $validated['variableFee'] = $this->getVariableFee((float) $charge->variable_percentage, $amount);
         $validated['rate'] = $this->getRate(
-            $charge->rate,
+            (float) $charge->rate,
             $charge->sourceCurrency->code,
             $charge->targetCurrency->code,
             $amount
@@ -337,30 +336,32 @@ class TransactionController extends Controller
      */
     public function currencyBalance(Request $request): JsonResponse|array
     {
-        if (!$request->ajax()) {
+        if (! $request->ajax()) {
             return response()->json(['error' => 'Invalid request'], 400);
         }
 
         $filters = $request->only('source_currency_id');
-            $sourceCurrency = Currency::findOrFail($filters['source_currency_id']);
-            $latestCurrencyBalance = auth()->user()->latestCurrencyBalance;
+        $sourceCurrency = Currency::findOrFail($filters['source_currency_id']);
+        /** @var User $user */
+        $user = Auth::user();
+        $latestCurrencyBalance = $user->latestCurrencyBalance;
 
-        if (!$latestCurrencyBalance) {
+        if (! $latestCurrencyBalance) {
             return response()->json(['error' => 'No balance found'], 400);
         }
 
         $sourceAmount = $latestCurrencyBalance->getBalanceForCurrency($sourceCurrency->code);
 
-            return [
+        return [
             'sourceCurrency' => $sourceCurrency,
             'sourceCurrencyBalance' => $sourceAmount,
-            ];
+        ];
     }
 
     /**
      * Alternate data for recipient transaction record.
      *
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
     public function alternateSourceRecord(array $validated): array
@@ -369,7 +370,7 @@ class TransactionController extends Controller
 
         $validated['type'] = 'Credit';
         $validated['user_id'] = $originalRecipientId;
-        $validated['recipient_id'] = auth()->id();
+        $validated['recipient_id'] = Auth::id();
         $validated['currency_id'] = $validated['target_currency_id'];
         $validated['sign'] = '+';
 

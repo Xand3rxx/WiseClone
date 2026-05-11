@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Charge;
@@ -25,85 +27,88 @@ class ChargeSeeder extends Seeder
             );
         }
 
-        $this->command->info('Currency charges/rates seeded: ' . count($charges) . ' combinations');
+        $this->command->info('Currency charges/rates seeded: '.count($charges).' combinations');
     }
 
     /**
      * Get the charge configurations.
-     * Exchange rates updated as of December 2024.
+     * Exchange rates updated as of May 11, 2026 using mid-market rates.
      *
      * @return array<int, array<string, mixed>>
      */
     private function getCharges(): array
     {
+        $currencies = Currency::whereIn('code', ['EUR', 'NGN', 'USD'])
+            ->pluck('id', 'code');
+
         return [
-            // EUR conversions (EUR = Currency ID 1)
+            // EUR conversions
             [
-                'source_currency_id' => 1,  // EUR to EUR
-                'target_currency_id' => 1,
+                'source_currency_id' => $currencies['EUR'],  // EUR to EUR
+                'target_currency_id' => $currencies['EUR'],
                 'rate' => 1.0,
                 'variable_percentage' => 0,
-                'fixed_fee' => 0.41,
+                'fixed_fee' => 0.10,
             ],
             [
-                'source_currency_id' => 1,  // EUR to NGN
-                'target_currency_id' => 2,
-                'rate' => 1680.00,  // December 2024 rate
-                'variable_percentage' => 0.57,
-                'fixed_fee' => 0.71,
+                'source_currency_id' => $currencies['EUR'],  // EUR to NGN
+                'target_currency_id' => $currencies['NGN'],
+                'rate' => 1600.00,
+                'variable_percentage' => 0.35,
+                'fixed_fee' => 0.35,
             ],
             [
-                'source_currency_id' => 1,  // EUR to USD
-                'target_currency_id' => 3,
-                'rate' => 1.05,  // December 2024 rate
-                'variable_percentage' => 0.41,
-                'fixed_fee' => 0.58,
+                'source_currency_id' => $currencies['EUR'],  // EUR to USD
+                'target_currency_id' => $currencies['USD'],
+                'rate' => 1.151079,
+                'variable_percentage' => 0.25,
+                'fixed_fee' => 0.30,
             ],
 
-            // NGN conversions (NGN = Currency ID 2)
+            // NGN conversions
             [
-                'source_currency_id' => 2,  // NGN to EUR
-                'target_currency_id' => 1,
-                'rate' => 0.000595,  // December 2024 rate
-                'variable_percentage' => 0.55,
-                'fixed_fee' => 500.00,
+                'source_currency_id' => $currencies['NGN'],  // NGN to EUR
+                'target_currency_id' => $currencies['EUR'],
+                'rate' => 0.000625,
+                'variable_percentage' => 0.30,
+                'fixed_fee' => 150.00,
             ],
             [
-                'source_currency_id' => 2,  // NGN to NGN
-                'target_currency_id' => 2,
+                'source_currency_id' => $currencies['NGN'],  // NGN to NGN
+                'target_currency_id' => $currencies['NGN'],
                 'rate' => 1.0,
                 'variable_percentage' => 0,
-                'fixed_fee' => 250.00,
+                'fixed_fee' => 100.00,
             ],
             [
-                'source_currency_id' => 2,  // NGN to USD
-                'target_currency_id' => 3,
-                'rate' => 0.000625,  // December 2024 rate
-                'variable_percentage' => 0.55,
-                'fixed_fee' => 400.00,
+                'source_currency_id' => $currencies['NGN'],  // NGN to USD
+                'target_currency_id' => $currencies['USD'],
+                'rate' => 0.000719,
+                'variable_percentage' => 0.30,
+                'fixed_fee' => 150.00,
             ],
 
-            // USD conversions (USD = Currency ID 3)
+            // USD conversions
             [
-                'source_currency_id' => 3,  // USD to EUR
-                'target_currency_id' => 1,
-                'rate' => 0.95,  // December 2024 rate
-                'variable_percentage' => 0.42,
-                'fixed_fee' => 4.67,
+                'source_currency_id' => $currencies['USD'],  // USD to EUR
+                'target_currency_id' => $currencies['EUR'],
+                'rate' => 0.868075,
+                'variable_percentage' => 0.25,
+                'fixed_fee' => 0.00,
             ],
             [
-                'source_currency_id' => 3,  // USD to NGN
-                'target_currency_id' => 2,
-                'rate' => 1600.00,  // December 2024 rate
-                'variable_percentage' => 0.59,
-                'fixed_fee' => 5.01,
+                'source_currency_id' => $currencies['USD'],  // USD to NGN
+                'target_currency_id' => $currencies['NGN'],
+                'rate' => 1390.00,
+                'variable_percentage' => 0.35,
+                'fixed_fee' => 0.00,
             ],
             [
-                'source_currency_id' => 3,  // USD to USD
-                'target_currency_id' => 3,
+                'source_currency_id' => $currencies['USD'],  // USD to USD
+                'target_currency_id' => $currencies['USD'],
                 'rate' => 1.0,
                 'variable_percentage' => 0,
-                'fixed_fee' => 4.86,
+                'fixed_fee' => 1.00,
             ],
         ];
     }

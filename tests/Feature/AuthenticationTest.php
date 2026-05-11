@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
-use App\Models\Charge;
 use App\Models\Currency;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -79,17 +81,20 @@ class AuthenticationTest extends TestCase
 
     public function test_user_can_register(): void
     {
+        Notification::fake();
+
         $response = $this->post('/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'WiseCloneMvpPassphrase123!',
+            'password_confirmation' => 'WiseCloneMvpPassphrase123!',
         ]);
 
         $response->assertRedirect('/');
         $this->assertDatabaseHas('users', [
             'email' => 'test@example.com',
         ]);
+        $this->get('/')->assertRedirect('/email/verify');
     }
 
     public function test_authenticated_user_can_logout(): void

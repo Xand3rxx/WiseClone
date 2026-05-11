@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
 use App\Models\Charge;
@@ -17,7 +19,9 @@ class TransactionTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected User $recipient;
+
     protected Currency $usdCurrency;
 
     protected function setUp(): void
@@ -38,11 +42,18 @@ class TransactionTest extends TestCase
 
         // Create charges
         Charge::create([
-            'source_currency_id' => 3,
-            'target_currency_id' => 3,
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
             'rate' => 1.0,
             'variable_percentage' => 0,
-            'fixed_fee' => 4.86,
+            'fixed_fee' => 1.00,
+        ]);
+        Charge::create([
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => Currency::where('code', 'NGN')->firstOrFail()->id,
+            'rate' => 1390.0,
+            'variable_percentage' => 0.35,
+            'fixed_fee' => 0.00,
         ]);
 
         // Create users
@@ -105,6 +116,25 @@ class TransactionTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_small_usd_to_ngn_converter_displays_near_market_recipient_amount(): void
+    {
+        $this->actingAs($this->user);
+
+        $ngnCurrency = Currency::where('code', 'NGN')->firstOrFail();
+
+        $response = $this->post('/transaction/source-converter', [
+            'source_amount' => '3.50',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $ngnCurrency->id,
+        ], ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $response->assertStatus(200);
+        $response->assertSee('id="target-amount-display"', false);
+        $response->assertSee('value="4,847.97"', false);
+        $response->assertSee('name="target_amount"', false);
+        $response->assertSee('value="4847.97"', false);
+    }
+
     public function test_user_can_create_transaction(): void
     {
         $this->actingAs($this->user);
@@ -112,7 +142,7 @@ class TransactionTest extends TestCase
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
             'source_amount' => '100',
-            'target_amount' => '95.14',
+            'target_amount' => '99.00',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -123,6 +153,30 @@ class TransactionTest extends TestCase
             'recipient_id' => $this->recipient->id,
             'type' => 'Debit',
         ]);
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->recipient->id,
+            'recipient_id' => $this->user->id,
+            'type' => 'Credit',
+            'amount' => '99.00',
+        ]);
+        $this->assertSame(900.0, (float) $this->user->fresh()->latestCurrencyBalance->USD);
+        $this->assertSame(599.0, (float) $this->recipient->fresh()->latestCurrencyBalance->USD);
+    }
+
+    public function test_user_cannot_submit_stale_or_tampered_quote(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->recipient->uuid,
+            'source_amount' => '100',
+            'target_amount' => '1.00',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseCount('transactions', 2);
     }
 
     public function test_user_can_create_transaction_with_decimal_amount(): void
@@ -132,7 +186,7 @@ class TransactionTest extends TestCase
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
             'source_amount' => '10.50',
-            'target_amount' => '5.64',
+            'target_amount' => '9.50',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -152,7 +206,7 @@ class TransactionTest extends TestCase
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
             'source_amount' => '100.50',  // Cleave.js might format as "100.50"
-            'target_amount' => '95.64',
+            'target_amount' => '99.50',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -168,7 +222,7 @@ class TransactionTest extends TestCase
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
             'source_amount' => '100',  // No commas in this small amount
-            'target_amount' => '95.14',
+            'target_amount' => '99.00',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -183,7 +237,7 @@ class TransactionTest extends TestCase
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->recipient->uuid,
             'source_amount' => '5000', // More than available balance
-            'target_amount' => '4995.14',
+            'target_amount' => '4999.00',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -234,6 +288,7 @@ class TransactionTest extends TestCase
 
     public function test_user_cannot_view_other_users_transaction(): void
     {
+        /** @var User $otherUser */
         $otherUser = User::factory()->create();
         $this->actingAs($otherUser);
 
@@ -251,7 +306,7 @@ class TransactionTest extends TestCase
         $response = $this->post('/transaction', [
             'recipient_uuid' => $this->user->uuid, // Self-transfer
             'source_amount' => '100',
-            'target_amount' => '95.14',
+            'target_amount' => '99.00',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $this->usdCurrency->id,
         ]);
@@ -259,17 +314,80 @@ class TransactionTest extends TestCase
         $response->assertSessionHas('error');
     }
 
-    public function test_admin_cannot_create_transaction(): void
+    public function test_admin_can_create_transaction(): void
     {
-        // Create admin role and user
-        $adminRole = Role::find(1); // administrator
+        $adminRole = Role::where('name', 'administrator')->firstOrFail();
+        /** @var User $adminUser */
         $adminUser = User::factory()->create(['role_id' => $adminRole->id]);
+        $adminTx = Transaction::create([
+            'user_id' => $adminUser->id,
+            'recipient_id' => $adminUser->id,
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+            'amount' => 1000,
+            'rate' => 1.0,
+            'transfer_fee' => 0,
+            'variable_fee' => 0,
+            'fixed_fee' => 0,
+            'type' => 'Credit',
+            'status' => 'Success',
+        ]);
+        CurrencyBalance::create([
+            'user_id' => $adminUser->id,
+            'transaction_id' => $adminTx->id,
+            'USD' => 1000,
+            'EUR' => 0,
+            'NGN' => 0,
+        ]);
 
         $this->actingAs($adminUser);
 
         $response = $this->get('/transaction/create');
 
+        $response->assertStatus(200);
+    }
+
+    public function test_admin_can_make_transaction(): void
+    {
+        $adminRole = Role::where('name', 'administrator')->firstOrFail();
+        /** @var User $adminUser */
+        $adminUser = User::factory()->create(['role_id' => $adminRole->id]);
+        $adminTx = Transaction::create([
+            'user_id' => $adminUser->id,
+            'recipient_id' => $adminUser->id,
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+            'amount' => 1000,
+            'rate' => 1.0,
+            'transfer_fee' => 0,
+            'variable_fee' => 0,
+            'fixed_fee' => 0,
+            'type' => 'Credit',
+            'status' => 'Success',
+        ]);
+        CurrencyBalance::create([
+            'user_id' => $adminUser->id,
+            'transaction_id' => $adminTx->id,
+            'USD' => 1000,
+            'EUR' => 0,
+            'NGN' => 0,
+        ]);
+
+        $this->actingAs($adminUser);
+
+        $response = $this->post('/transaction', [
+            'recipient_uuid' => $this->recipient->uuid,
+            'source_amount' => '100',
+            'target_amount' => '99.00',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ]);
+
         $response->assertRedirect('/');
-        $response->assertSessionHas('error');
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $adminUser->id,
+            'recipient_id' => $this->recipient->id,
+            'type' => 'Debit',
+        ]);
     }
 }

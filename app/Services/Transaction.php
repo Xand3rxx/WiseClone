@@ -1,13 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
+
+use Illuminate\Support\Collection;
 
 class Transaction
 {
     /**
      * Get status display properties.
      *
-     * @param string $status The transaction status
+     * @param  string  $status  The transaction status
      * @return object Object containing status display properties
      */
     public function status(string $status): object
@@ -41,7 +45,7 @@ class Transaction
     /**
      * Get transaction type display properties.
      *
-     * @param string $type The transaction type
+     * @param  string  $type  The transaction type
      * @return object Object containing type display properties
      */
     public function type(string $type): object
@@ -76,7 +80,7 @@ class Transaction
     /**
      * Get summary statistics for transactions.
      *
-     * @param \Illuminate\Support\Collection $transactions Collection of transactions
+     * @param  Collection  $transactions  Collection of transactions
      * @return array<string, mixed> Summary statistics
      */
     public function getSummary($transactions): array

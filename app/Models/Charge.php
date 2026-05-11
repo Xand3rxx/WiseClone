@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -66,6 +68,7 @@ class Charge extends Model
     public function calculateTransferFee(float $amount): float
     {
         $variableFee = ($this->variable_percentage / 100) * $amount;
+
         return $variableFee + (float) $this->fixed_fee;
     }
 
@@ -76,6 +79,7 @@ class Charge extends Model
     {
         $transferFee = $this->calculateTransferFee($sourceAmount);
         $amountToConvert = $sourceAmount - $transferFee;
+
         return $amountToConvert * (float) $this->rate;
     }
 }
