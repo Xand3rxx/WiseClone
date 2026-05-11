@@ -116,6 +116,10 @@
 
                 <p class="fs-4 mb-4">This calculation is deduced from <strong>Wise</strong> provided on <a href="https://wise.com/gb/pricing/send-money" target="_blank">Wise Fees For Sending Money</a> webpage.</p>
 
+                    <button type="button" class="btn btn-sm btn-light-primary fw-bolder mb-6" data-bs-toggle="modal" data-bs-target="#charges_rates_modal">
+                        View Charges & Rates
+                    </button>
+
                     <div class="notice d-flex bg-light-warning rounded border-warning border border-dashed mb-9 p-6">
                         <!--begin::Icon-->
                         <!--begin::Svg Icon | path: icons/duotune/art/art006.svg-->
@@ -172,43 +176,6 @@
                         <!--end::Wrapper-->
                     </div>
 
-                    <fieldset>
-                        <legend class="mt-4 text-primary">Charges & Rate</legend>
-                        <div class="table-responsive">
-                            <!--begin::Table-->
-                            <table class="table align-middle table-row-dashed gy-5">
-                                <!--begin::Table head-->
-                                <thead class="border-bottom border-gray-200 fs-7 fw-bolder">
-                                    <!--begin::Table row-->
-                                    <tr class="text-start text-muted text-uppercase gs-0">
-                                        <th class="text-center">#</th>
-                                        <th class="text-center">Source Currency</th>
-                                        <th class="text-center">Target Currency</th>
-                                        <th class="text-center">Rate</th>
-                                        <th class="text-center">Variable Percentage</th>
-                                        <th class="text-center">Fixed Fee</th>
-                                    </tr>
-                                    <!--end::Table row-->
-                                </thead>
-                                <!--end::Table head-->
-                                <!--begin::Table body-->
-                                <tbody class="fs-7 fw-bold text-gray-600">
-                                    @foreach ($charges as $charge)
-                                        <tr>
-                                            <td class="text-center">{{ $loop->iteration }}</td>
-                                            <td class="text-center">{{ !empty($charge['sourceCurrency']['code']) ? $charge['sourceCurrency']['code'] : 'Unavailable' }}</td>
-                                            <td class="text-center">{{ !empty($charge['targetCurrency']['code']) ? $charge['targetCurrency']['code'] : 'Unavailable' }}</td>
-                                            <td class="text-center">{{ !empty($charge['rate']) ? $charge['rate'] : '0' }}</td>
-                                            <td class="text-center">{{ !empty($charge['variable_percentage']) ? $charge['variable_percentage'] : '0' }}%</td>
-                                            <td class="text-center">{{ !empty($charge['fixed_fee']) ? $charge['fixed_fee'] : '0' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                                <!--end::Table body-->
-                            </table>
-                            <!--end::Table-->
-                        </div>
-                    </fieldset>
                 </div>
             </div>
             <!--end::Sidebar-->
@@ -216,6 +183,52 @@
         <!--end::Layout-->
     </div>
     <!--end::Post-->
+</div>
+
+<div class="modal fade" id="charges_rates_modal" tabindex="-1" aria-labelledby="charges_rates_modal_label" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fw-bolder" id="charges_rates_modal_label">Charges & Rates</h2>
+                <button type="button" class="btn btn-sm btn-icon btn-active-light-primary" data-bs-dismiss="modal" aria-label="Close">
+                    <span class="svg-icon svg-icon-1">×</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted fw-bold fs-7 mb-6">These rates and fees are used to calculate transfer quotes before you submit a transaction.</p>
+
+                <div class="table-responsive">
+                    <table class="table align-middle table-row-dashed gy-5">
+                        <thead class="border-bottom border-gray-200 fs-7 fw-bolder">
+                            <tr class="text-start text-muted text-uppercase gs-0">
+                                <th class="text-center">#</th>
+                                <th class="text-center">Source Currency</th>
+                                <th class="text-center">Target Currency</th>
+                                <th class="text-center">Rate</th>
+                                <th class="text-center">Variable Percentage</th>
+                                <th class="text-center">Fixed Fee</th>
+                            </tr>
+                        </thead>
+                        <tbody class="fs-7 fw-bold text-gray-600">
+                            @foreach ($charges as $charge)
+                                <tr>
+                                    <td class="text-center">{{ $loop->iteration }}</td>
+                                    <td class="text-center">{{ !empty($charge['sourceCurrency']['code']) ? $charge['sourceCurrency']['code'] : 'Unavailable' }}</td>
+                                    <td class="text-center">{{ !empty($charge['targetCurrency']['code']) ? $charge['targetCurrency']['code'] : 'Unavailable' }}</td>
+                                    <td class="text-center">{{ !empty($charge['rate']) ? $charge['rate'] : '0' }}</td>
+                                    <td class="text-center">{{ !empty($charge['variable_percentage']) ? $charge['variable_percentage'] : '0' }}%</td>
+                                    <td class="text-center">{{ !empty($charge['fixed_fee']) ? $charge['fixed_fee'] : '0' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light fw-bolder" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('scripts')

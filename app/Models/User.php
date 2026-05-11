@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -27,7 +28,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'currency_id',
         'name',
         'email',
+        'email_verified_at',
         'password',
+        'blocked_at',
     ];
 
     /**
@@ -49,6 +52,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'blocked_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -139,5 +143,13 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isCustomer(): bool
     {
         return $this->role?->name === 'customer';
+    }
+
+    /**
+     * Check if user is blocked from signing in or transacting.
+     */
+    public function isBlocked(): bool
+    {
+        return $this->blocked_at !== null;
     }
 }

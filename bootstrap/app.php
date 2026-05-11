@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\EncryptCookies;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\RedirectIfAuthenticated;
 use App\Http\Middleware\ValidateSignature;
 use App\Http\Middleware\VerifyCsrfToken;
@@ -47,6 +48,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'auth' => Authenticate::class,
+            'active' => EnsureAccountIsActive::class,
             'auth.basic' => AuthenticateWithBasicAuth::class,
             'auth.session' => AuthenticateSession::class,
             'cache.headers' => SetCacheHeaders::class,

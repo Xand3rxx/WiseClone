@@ -4,16 +4,18 @@
 [![PHP](https://img.shields.io/badge/PHP-8.3+-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
-A modern money transfer application inspired by [Wise](https://www.wise.com) (formerly TransferWise). Built with Laravel 13, featuring multi-currency transfers, admin-managed rates and fees, atomic balance updates, and a clean fintech MVP interface.
+A modern money transfer application inspired by [Wise](https://www.wise.com) (formerly TransferWise). Built with Laravel 13, featuring multi-currency transfers, admin-managed users, admin-managed rates and fees, atomic balance updates, and a clean fintech MVP interface.
 
 ## ✨ Features
 
 -   🔐 **Secure Authentication** - User registration, login, email verification, and encrypted session support
 -   💱 **Multi-Currency Support** - Transfer between USD, EUR, and NGN
+-   👥 **Admin User Management** - Admin users can create, list, block, delete, and review user accounts
 -   📊 **Admin Rate Management** - Admin users can update exchange rates, variable fees, and fixed fees from the UI
 -   📝 **Transaction History** - Complete audit trail of all transfers
 -   💰 **Atomic Transfer Posting** - Debit and credit legs are recorded in one locked database transaction
--   👤 **Role-Based Access** - Admin and customer roles; admins can manage rates and make transfers
+-   👤 **Role-Based Access** - Admin and customer roles; admins can manage users, manage rates, and make transfers
+-   🔑 **Password Management** - Authenticated users and admins can change their own passwords
 -   🐳 **Docker Ready** - Full Docker configuration for easy deployment
 -   ✅ **Comprehensive Tests** - Unit and feature tests included
 
@@ -93,18 +95,24 @@ Access the application at: http://localhost:8080 (Docker) or http://localhost:80
 | Admin | admin@wiseclone.com | password |
 | User  | user@wiseclone.com  | password |
 
-> Demo accounts are seeded for local development and interviews only. Replace seeded passwords and credentials before any real deployment.
+> Demo accounts are seeded for local development only. Replace seeded passwords and credentials before any real deployment.
 
 ## 🧑‍💼 Admin Capabilities
 
+-   Create customer or administrator accounts from the admin UI.
+-   List users, review account status, and view user details.
+-   Block and unblock user access without deleting transaction history.
+-   Soft-delete users while preserving transaction and balance audit records.
+-   View a user's related transactions from the user details page.
 -   View and update exchange rates for all supported currency pairs.
 -   Update variable percentage fees and fixed fees without changing code.
 -   Make transfers from admin accounts when the admin has an available balance.
 -   View all transactions from the dashboard.
 
-Rate management is available at:
+Admin management pages are available at:
 
 ```text
+/admin/users
 /admin/rates
 ```
 
@@ -209,8 +217,12 @@ _Detailed view of a completed transaction_
 -   Email verification required for protected money routes
 -   POST-only funding action
 -   Admin-only rate management
+-   Admin-only user management
+-   Blocked users are prevented from logging in and are signed out from active sessions
+-   Soft deletes for users so transaction history remains auditable
 -   Atomic debit/credit posting with locked balance rows
 -   Password hashing with bcrypt
+-   Authenticated password change with current-password verification
 -   Strong password validation for new registrations
 -   Input validation and sanitization
 -   SQL injection prevention via Eloquent ORM
@@ -227,6 +239,15 @@ _Detailed view of a completed transaction_
 | GET    | `/transaction/create`           | New transaction form            |
 | POST   | `/transaction`                  | Create transaction              |
 | GET    | `/transaction/{uuid}`           | View transaction details        |
+| GET    | `/account/password`             | Change password form            |
+| PATCH  | `/account/password`             | Update own password             |
+| GET    | `/admin/users`                  | Admin user list                 |
+| GET    | `/admin/users/create`           | Admin create user form          |
+| POST   | `/admin/users`                  | Admin create user action        |
+| GET    | `/admin/users/{uuid}`           | Admin user details              |
+| PATCH  | `/admin/users/{uuid}/block`     | Block user account              |
+| PATCH  | `/admin/users/{uuid}/unblock`   | Unblock user account            |
+| DELETE | `/admin/users/{uuid}`           | Soft-delete user account        |
 | GET    | `/admin/rates`                  | Admin rate management           |
 | PATCH  | `/admin/rates/{charge}`         | Update a rate/fee pair          |
 

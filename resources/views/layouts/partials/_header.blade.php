@@ -65,6 +65,11 @@
 											<!--end::Menu separator-->
 											<!--begin::Menu item-->
 											<div class="menu-item px-5">
+												<a href="{{ route('account.password.edit') }}" class="menu-link px-5">Change Password</a>
+											</div>
+											<!--end::Menu item-->
+											<!--begin::Menu item-->
+											<div class="menu-item px-5">
 												<a href="{{ route('logout') }}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();" class="menu-link px-5">Sign Out</a>
 
                                                 <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
@@ -99,6 +104,12 @@
 										</a>
 									</div>
                                     @if(auth()->user()?->isAdmin())
+                                        <div data-kt-menu-placement="bottom-start" class="menu-item menu-lg-down-accordion me-lg-1">
+                                            <a class="menu-link py-3" href="{{ route('admin.users.index') }}">
+                                                <span class="menu-title">Users</span>
+                                                <span class="menu-arrow d-lg-none"></span>
+                                            </a>
+                                        </div>
                                         <div data-kt-menu-placement="bottom-start" class="menu-item menu-lg-down-accordion me-lg-1">
                                             <a class="menu-link py-3" href="{{ route('admin.rates.index') }}">
                                                 <span class="menu-title">Rates</span>
