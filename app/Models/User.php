@@ -110,7 +110,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function latestCurrencyBalance(): HasOne
     {
-        return $this->hasOne(CurrencyBalance::class)->latestOfMany();
+        return $this->hasOne(CurrencyBalance::class)->latestOfMany('id');
     }
 
     /**
@@ -119,6 +119,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function currencyBalances(): HasMany
     {
         return $this->hasMany(CurrencyBalance::class);
+    }
+
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(Account::class);
+    }
+
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(LedgerEntry::class);
     }
 
     /**

@@ -69,6 +69,7 @@
                         <!--begin::Refund button-->
                         <form method="POST" action="{{ route('fund_account') }}" class="flex-shrink-0 p-4 p-lg-0 me-lg-2 mb-3">
                             @csrf
+                            <input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                             <button type="submit" class="btn btn-sm btn-primary fw-bolder w-100 w-lg-auto">Refund Dollar Account</button>
                         </form>
                         <!--end::Refund button-->

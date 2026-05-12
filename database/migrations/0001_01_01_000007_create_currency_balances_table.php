@@ -15,8 +15,8 @@ return new class extends Migration
     {
         Schema::create('currency_balances', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('transaction_id')->constrained('transactions')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('transaction_id')->constrained('transactions')->restrictOnDelete();
             $table->decimal('USD', 15, 2)->default(0);
             $table->decimal('EUR', 15, 2)->default(0);
             $table->decimal('NGN', 15, 2)->default(0);

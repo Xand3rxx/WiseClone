@@ -9,9 +9,12 @@ use App\Models\Currency;
 use App\Models\CurrencyBalance;
 use App\Models\Role;
 use App\Models\Transaction;
+use App\Models\TransferQuote;
 use App\Models\User;
+use App\Services\TransferQuoteService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class TransactionTest extends TestCase
@@ -111,7 +114,7 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->get('/transaction/create');
+        $response = $this->get(route('transaction.create'));
 
         $response->assertStatus(200);
     }
@@ -122,7 +125,7 @@ class TransactionTest extends TestCase
 
         $ngnCurrency = Currency::where('code', 'NGN')->firstOrFail();
 
-        $response = $this->post('/transaction/source-converter', [
+        $response = $this->post(route('transaction.source_converter'), [
             'source_amount' => '3.50',
             'source_currency_id' => $this->usdCurrency->id,
             'target_currency_id' => $ngnCurrency->id,
@@ -130,24 +133,18 @@ class TransactionTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('id="target-amount-display"', false);
-        $response->assertSee('value="4,847.97"', false);
+        $response->assertSee('value="4,851.10"', false);
         $response->assertSee('name="target_amount"', false);
-        $response->assertSee('value="4847.97"', false);
+        $response->assertSee('value="4851.10"', false);
     }
 
     public function test_user_can_create_transaction(): void
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '100',
-            'target_amount' => '99.00',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload());
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
         $this->assertDatabaseHas('transactions', [
             'user_id' => $this->user->id,
             'recipient_id' => $this->recipient->id,
@@ -159,6 +156,10 @@ class TransactionTest extends TestCase
             'type' => 'Credit',
             'amount' => '99.00',
         ]);
+        $debit = Transaction::where('user_id', $this->user->id)->where('type', 'Debit')->firstOrFail();
+        $credit = Transaction::where('user_id', $this->recipient->id)->where('type', 'Credit')->latest('id')->firstOrFail();
+        $this->assertNotNull($debit->transfer_group_uuid);
+        $this->assertSame($debit->transfer_group_uuid, $credit->transfer_group_uuid);
         $this->assertSame(900.0, (float) $this->user->fresh()->latestCurrencyBalance->USD);
         $this->assertSame(599.0, (float) $this->recipient->fresh()->latestCurrencyBalance->USD);
     }
@@ -167,13 +168,7 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '100',
-            'target_amount' => '1.00',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(targetAmount: '1.00'));
 
         $response->assertSessionHas('error');
         $this->assertDatabaseCount('transactions', 2);
@@ -183,15 +178,9 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '10.50',
-            'target_amount' => '9.50',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(sourceAmount: '10.50'));
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
         $this->assertDatabaseHas('transactions', [
             'user_id' => $this->user->id,
             'recipient_id' => $this->recipient->id,
@@ -203,15 +192,9 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '100.50',  // Cleave.js might format as "100.50"
-            'target_amount' => '99.50',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(sourceAmount: '100.50'));
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
     }
 
     public function test_user_can_create_transaction_with_thousand_separator(): void
@@ -219,28 +202,16 @@ class TransactionTest extends TestCase
         $this->actingAs($this->user);
 
         // Simulate Cleave.js formatted input with thousand separator
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '100',  // No commas in this small amount
-            'target_amount' => '99.00',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(sourceAmount: '100'));
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
     }
 
     public function test_user_cannot_create_transaction_with_insufficient_funds(): void
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '5000', // More than available balance
-            'target_amount' => '4999.00',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(sourceAmount: '5000'));
 
         $response->assertSessionHas('error');
     }
@@ -249,13 +220,10 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
+        $response = $this->post(route('transaction.store'), array_merge($this->transferPayload(), [
             'source_amount' => '0',
             'target_amount' => '0',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        ]));
 
         $response->assertSessionHasErrors('source_amount');
     }
@@ -264,15 +232,60 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '0.001', // Below minimum of 0.01
+        $response = $this->post(route('transaction.store'), array_merge($this->transferPayload(), [
+            'source_amount' => '0.001',
             'target_amount' => '0',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        ]));
 
         $response->assertSessionHasErrors('source_amount');
+    }
+
+    public function test_user_cannot_create_transaction_with_malformed_money_input(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post(route('transaction.store'), array_merge($this->transferPayload(), [
+            'source_amount' => '1.2.3',
+        ]));
+
+        $response->assertSessionHasErrors('source_amount');
+    }
+
+    public function test_user_cannot_transfer_to_blocked_recipient(): void
+    {
+        $this->recipient->forceFill(['blocked_at' => now()])->save();
+        $this->actingAs($this->user);
+
+        $response = $this->post(route('transaction.store'), $this->transferPayload());
+
+        $response->assertSessionHasErrors('recipient_uuid');
+        $this->assertDatabaseCount('transactions', 2);
+    }
+
+    public function test_converter_rejects_over_balance_quote_requests(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->post(route('transaction.source_converter'), [
+            'source_amount' => '1000.01',
+            'source_currency_id' => $this->usdCurrency->id,
+            'target_currency_id' => $this->usdCurrency->id,
+        ], ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_transaction_history_retains_soft_deleted_participants(): void
+    {
+        $this->actingAs($this->user);
+
+        $this->post(route('transaction.store'), $this->transferPayload())->assertRedirect(route('home'));
+
+        $this->recipient->delete();
+        $transaction = Transaction::where('user_id', $this->user->id)->where('type', 'Debit')->firstOrFail();
+
+        $this->assertSame($this->recipient->id, $transaction->recipient->id);
+        $this->assertSame($this->recipient->full_name, $transaction->receiverNameFor($this->user->id));
     }
 
     public function test_user_can_view_transaction_details(): void
@@ -281,7 +294,7 @@ class TransactionTest extends TestCase
 
         $transaction = Transaction::where('user_id', $this->user->id)->first();
 
-        $response = $this->get("/transaction/{$transaction->uuid}");
+        $response = $this->get(route('transaction.show', $transaction->uuid));
 
         $response->assertStatus(200);
     }
@@ -294,7 +307,7 @@ class TransactionTest extends TestCase
 
         $transaction = Transaction::where('user_id', $this->user->id)->first();
 
-        $response = $this->get("/transaction/{$transaction->uuid}");
+        $response = $this->get(route('transaction.show', $transaction->uuid));
 
         $response->assertStatus(403);
     }
@@ -303,13 +316,7 @@ class TransactionTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->user->uuid, // Self-transfer
-            'source_amount' => '100',
-            'target_amount' => '99.00',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(recipient: $this->user));
 
         $response->assertSessionHas('error');
     }
@@ -342,7 +349,7 @@ class TransactionTest extends TestCase
 
         $this->actingAs($adminUser);
 
-        $response = $this->get('/transaction/create');
+        $response = $this->get(route('transaction.create'));
 
         $response->assertStatus(200);
     }
@@ -375,19 +382,47 @@ class TransactionTest extends TestCase
 
         $this->actingAs($adminUser);
 
-        $response = $this->post('/transaction', [
-            'recipient_uuid' => $this->recipient->uuid,
-            'source_amount' => '100',
-            'target_amount' => '99.00',
-            'source_currency_id' => $this->usdCurrency->id,
-            'target_currency_id' => $this->usdCurrency->id,
-        ]);
+        $response = $this->post(route('transaction.store'), $this->transferPayload(sender: $adminUser));
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
         $this->assertDatabaseHas('transactions', [
             'user_id' => $adminUser->id,
             'recipient_id' => $this->recipient->id,
             'type' => 'Debit',
         ]);
+    }
+
+    /**
+     * @return array<string, string|int>
+     */
+    private function transferPayload(
+        ?User $sender = null,
+        ?User $recipient = null,
+        string $sourceAmount = '100',
+        ?string $targetAmount = null,
+        ?Currency $sourceCurrency = null,
+        ?Currency $targetCurrency = null
+    ): array {
+        $sender ??= $this->user;
+        $recipient ??= $this->recipient;
+        $sourceCurrency ??= $this->usdCurrency;
+        $targetCurrency ??= $this->usdCurrency;
+
+        $quote = $this->quoteFor($sender, $sourceAmount, $sourceCurrency, $targetCurrency);
+
+        return [
+            'recipient_uuid' => $recipient->uuid,
+            'source_amount' => $sourceAmount,
+            'target_amount' => $targetAmount ?? (string) $quote->target_amount,
+            'quote_uuid' => $quote->uuid,
+            'idempotency_key' => (string) Str::uuid(),
+            'source_currency_id' => $sourceCurrency->id,
+            'target_currency_id' => $targetCurrency->id,
+        ];
+    }
+
+    private function quoteFor(User $sender, string $sourceAmount, Currency $sourceCurrency, Currency $targetCurrency): TransferQuote
+    {
+        return app(TransferQuoteService::class)->createQuote($sender, $sourceCurrency, $targetCurrency, $sourceAmount);
     }
 }

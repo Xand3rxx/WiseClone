@@ -7,10 +7,9 @@ namespace App\Http\Middleware;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureAccountIsActive
+class EnsureUserIsAdmin
 {
     /**
      * Handle an incoming request.
@@ -22,16 +21,8 @@ class EnsureAccountIsActive
         /** @var User|null $user */
         $user = $request->user();
 
-        if (! $user?->isBlocked()) {
-            return $next($request);
-        }
+        abort_unless($user?->isAdmin(), 403, 'Only administrators can access this area.');
 
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()
-            ->route('login')
-            ->with('error', 'Your account has been blocked. Please contact support.');
+        return $next($request);
     }
 }

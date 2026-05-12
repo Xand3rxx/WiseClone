@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +36,7 @@ class CurrencyBalance extends Model
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     /**
@@ -43,7 +44,7 @@ class CurrencyBalance extends Model
      */
     public function transaction(): BelongsTo
     {
-        return $this->belongsTo(Transaction::class);
+        return $this->belongsTo(Transaction::class)->withTrashed();
     }
 
     /**
@@ -51,6 +52,18 @@ class CurrencyBalance extends Model
      */
     public function getBalanceForCurrency(string $code): float
     {
+        $currency = Currency::where('code', strtoupper($code))->first();
+        $accountBalance = $currency
+            ? Account::where('user_id', $this->user_id)
+                ->where('currency_id', $currency->id)
+                ->where('type', Account::TYPE_CUSTOMER)
+                ->value('balance')
+            : null;
+
+        if ($accountBalance !== null) {
+            return (float) $accountBalance;
+        }
+
         return match (strtoupper($code)) {
             'USD' => (float) $this->USD,
             'EUR' => (float) $this->EUR,
@@ -61,11 +74,23 @@ class CurrencyBalance extends Model
 
     /**
      * Get total balance in USD equivalent.
-     * Using December 2024 approximate exchange rates.
+     * Uses managed rates, with May 2026 fallback rates if rates are not seeded yet.
      */
     public function getTotalBalanceAttribute(): float
     {
-        // Using December 2024 approximate rates: EUR to USD = 1.05, NGN to USD = 0.000625
-        return (float) $this->USD + ((float) $this->EUR * 1.05) + ((float) $this->NGN * 0.000625);
+        $eurInUsd = Money::multiplyByRate($this->EUR, (string) $this->rateToUsd('EUR', 1.151079));
+        $ngnInUsd = Money::multiplyByRate($this->NGN, (string) $this->rateToUsd('NGN', 0.000719));
+
+        return (float) Money::add(Money::add($this->USD, $eurInUsd), $ngnInUsd);
+    }
+
+    private function rateToUsd(string $sourceCurrency, float $fallbackRate): float
+    {
+        $rate = Charge::query()
+            ->whereHas('sourceCurrency', fn ($query) => $query->where('code', $sourceCurrency))
+            ->whereHas('targetCurrency', fn ($query) => $query->where('code', 'USD'))
+            ->value('rate');
+
+        return $rate !== null ? (float) $rate : $fallbackRate;
     }
 }

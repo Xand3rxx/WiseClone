@@ -5,28 +5,31 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Currency;
-use App\Models\CurrencyBalance;
+use App\Models\IdempotencyKey;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\IdempotencyService;
+use App\Services\LedgerService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class HomeController extends Controller
 {
-    /**
-     * Create a new controller instance.
-     */
-    public function __construct()
-    {
+    public function __construct(
+        private readonly LedgerService $ledgerService,
+        private readonly IdempotencyService $idempotencyService
+    ) {
         $this->middleware('auth');
     }
 
     /**
      * Display the authenticated user dashboard.
      */
-    public function index(): View
+    public function index(Request $request): View
     {
-        $user = auth()->user();
+        /** @var User $user */
+        $user = $request->user();
 
         $transactions = $user->isAdmin()
             ? Transaction::with(['user', 'recipient', 'sourceCurrency', 'targetCurrency'])
@@ -48,9 +51,19 @@ class HomeController extends Controller
     /**
      * Fund the user's dollar account.
      */
-    public function fundAccount(): RedirectResponse
+    public function fundAccount(Request $request): RedirectResponse
     {
-        $user = auth()->user();
+        $validated = $request->validate([
+            'idempotency_key' => 'required|string|max:100',
+        ]);
+        /** @var User $user */
+        $user = $request->user();
+        $idempotency = $this->idempotencyService->start($user->id, 'fund-account', $validated['idempotency_key'], $validated);
+
+        if ($idempotency->status === IdempotencyKey::STATUS_COMPLETED) {
+            return redirect()->route($idempotency->response_payload['route'] ?? 'transaction.create')
+                ->with($idempotency->response_payload['flash_type'] ?? 'success', $idempotency->response_payload['message'] ?? 'Your funding request was already processed.');
+        }
 
         // Prevent admin users from funding accounts
         if ($user->isAdmin()) {
@@ -73,26 +86,11 @@ class HomeController extends Controller
         $fundingAmount = 1000.00;
 
         // Demo funding is a system credit with no transfer fee.
-        $transaction = Transaction::create([
-            'user_id' => $user->id,
-            'recipient_id' => $systemUser->id,
-            'source_currency_id' => $currency->id,
-            'target_currency_id' => $currency->id,
-            'amount' => $fundingAmount,
-            'rate' => 1.0,
-            'transfer_fee' => 0,
-            'variable_fee' => 0,
-            'fixed_fee' => 0,
-            'type' => Transaction::TYPE['Credit'],
-            'status' => Transaction::STATUS['Success'],
-        ]);
-
-        CurrencyBalance::create([
-            'user_id' => $user->id,
-            'transaction_id' => $transaction->id,
-            'USD' => $fundingAmount,
-            'EUR' => $latestCurrencyBalance->EUR,
-            'NGN' => $latestCurrencyBalance->NGN,
+        $this->ledgerService->fundAccount($user, $systemUser, $currency, (string) $fundingAmount, $idempotency);
+        $this->idempotencyService->complete($idempotency, [
+            'route' => 'transaction.create',
+            'flash_type' => 'success',
+            'message' => 'Your dollar account has been credited with $1,000',
         ]);
 
         return redirect()->route('transaction.create')

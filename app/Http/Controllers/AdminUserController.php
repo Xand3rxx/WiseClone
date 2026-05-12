@@ -4,57 +4,44 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreAdminUserRequest;
 use App\Models\Currency;
-use App\Models\CurrencyBalance;
 use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\LedgerService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class AdminUserController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $this->authorizeAdmin();
-
         return view('admin.users.index', [
             'users' => User::with(['role', 'currency', 'latestCurrencyBalance'])
                 ->latest()
                 ->paginate(25),
-            'user' => Auth::user(),
+            'user' => $request->user(),
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        $this->authorizeAdmin();
-
         return view('admin.users.create', [
             'roles' => Role::orderBy('name')->get(),
             'currencies' => Currency::orderBy('code')->get(),
-            'user' => Auth::user(),
+            'user' => $request->user(),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreAdminUserRequest $request): RedirectResponse
     {
-        $this->authorizeAdmin();
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'role_id' => ['required', 'integer', 'exists:roles,id'],
-            'currency_id' => ['required', 'integer', 'exists:currencies,id'],
-            'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()->symbols()->uncompromised()],
-        ]);
+        $validated = $request->validated();
 
         /** @var User $admin */
-        $admin = Auth::user();
+        $admin = $request->user();
 
         $managedUser = DB::transaction(function () use ($validated, $admin): User {
             $managedUser = User::create([
@@ -67,7 +54,7 @@ class AdminUserController extends Controller
             ]);
 
             $currency = Currency::findOrFail($validated['currency_id']);
-            $this->createOpeningBalance($managedUser, $admin, $currency);
+            app(LedgerService::class)->fundAccount($managedUser, $admin, $currency, '0.00');
 
             return $managedUser;
         });
@@ -77,10 +64,8 @@ class AdminUserController extends Controller
             ->with('success', 'User created successfully.');
     }
 
-    public function show(string $uuid): View
+    public function show(Request $request, string $uuid): View
     {
-        $this->authorizeAdmin();
-
         $managedUser = User::withTrashed()
             ->with(['role', 'currency', 'latestCurrencyBalance'])
             ->where('uuid', $uuid)
@@ -94,40 +79,34 @@ class AdminUserController extends Controller
         return view('admin.users.show', [
             'managedUser' => $managedUser,
             'transactions' => $transactions,
-            'user' => Auth::user(),
+            'user' => $request->user(),
         ]);
     }
 
-    public function block(string $uuid): RedirectResponse
+    public function block(Request $request, string $uuid): RedirectResponse
     {
-        $this->authorizeAdmin();
-
         $managedUser = $this->findActiveUser($uuid);
-        $this->ensureCanManage($managedUser, 'block');
+        $this->ensureCanManage($managedUser, (int) $request->user()->id, 'block');
 
         $managedUser->forceFill(['blocked_at' => now()])->save();
 
         return back()->with('success', 'User blocked successfully.');
     }
 
-    public function unblock(string $uuid): RedirectResponse
+    public function unblock(Request $request, string $uuid): RedirectResponse
     {
-        $this->authorizeAdmin();
-
         $managedUser = $this->findActiveUser($uuid);
-        $this->ensureCanManage($managedUser, 'unblock');
+        $this->ensureCanManage($managedUser, (int) $request->user()->id, 'unblock');
 
         $managedUser->forceFill(['blocked_at' => null])->save();
 
         return back()->with('success', 'User unblocked successfully.');
     }
 
-    public function destroy(string $uuid): RedirectResponse
+    public function destroy(Request $request, string $uuid): RedirectResponse
     {
-        $this->authorizeAdmin();
-
         $managedUser = $this->findActiveUser($uuid);
-        $this->ensureCanManage($managedUser, 'delete');
+        $this->ensureCanManage($managedUser, (int) $request->user()->id, 'delete');
 
         $managedUser->delete();
 
@@ -136,46 +115,13 @@ class AdminUserController extends Controller
             ->with('success', 'User deleted successfully. Transaction history is retained.');
     }
 
-    private function createOpeningBalance(User $managedUser, User $admin, Currency $currency): void
-    {
-        $transaction = Transaction::create([
-            'user_id' => $managedUser->id,
-            'recipient_id' => $admin->id,
-            'source_currency_id' => $currency->id,
-            'target_currency_id' => $currency->id,
-            'amount' => 0,
-            'rate' => 1.0,
-            'transfer_fee' => 0,
-            'variable_fee' => 0,
-            'fixed_fee' => 0,
-            'type' => Transaction::TYPE['Credit'],
-            'status' => Transaction::STATUS['Success'],
-        ]);
-
-        CurrencyBalance::create([
-            'user_id' => $managedUser->id,
-            'transaction_id' => $transaction->id,
-            'USD' => 0,
-            'EUR' => 0,
-            'NGN' => 0,
-        ]);
-    }
-
     private function findActiveUser(string $uuid): User
     {
         return User::where('uuid', $uuid)->firstOrFail();
     }
 
-    private function ensureCanManage(User $managedUser, string $action): void
+    private function ensureCanManage(User $managedUser, int $actorId, string $action): void
     {
-        abort_if($managedUser->id === Auth::id(), 422, "You cannot {$action} your own account.");
-    }
-
-    private function authorizeAdmin(): void
-    {
-        /** @var User|null $user */
-        $user = Auth::user();
-
-        abort_unless($user?->isAdmin(), 403, 'Only administrators can manage users.');
+        abort_if($managedUser->id === $actorId, 422, "You cannot {$action} your own account.");
     }
 }

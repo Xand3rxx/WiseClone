@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -65,21 +66,21 @@ class Charge extends Model
     /**
      * Calculate the transfer fee for a given amount.
      */
-    public function calculateTransferFee(float $amount): float
+    public function calculateTransferFee(float|string $amount): float
     {
-        $variableFee = ($this->variable_percentage / 100) * $amount;
+        $variableFee = Money::percentage($amount, $this->variable_percentage);
 
-        return $variableFee + (float) $this->fixed_fee;
+        return (float) Money::add($variableFee, $this->fixed_fee);
     }
 
     /**
      * Calculate the target amount after fees and conversion.
      */
-    public function calculateTargetAmount(float $sourceAmount): float
+    public function calculateTargetAmount(float|string $sourceAmount): float
     {
         $transferFee = $this->calculateTransferFee($sourceAmount);
-        $amountToConvert = $sourceAmount - $transferFee;
+        $amountToConvert = Money::subtract($sourceAmount, (string) $transferFee);
 
-        return $amountToConvert * (float) $this->rate;
+        return (float) Money::multiplyByRate($amountToConvert, $this->rate);
     }
 }

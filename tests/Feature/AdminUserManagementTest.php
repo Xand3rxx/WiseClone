@@ -47,7 +47,7 @@ class AdminUserManagementTest extends TestCase
 
     public function test_admin_can_view_user_list(): void
     {
-        $response = $this->actingAs($this->admin)->get('/admin/users');
+        $response = $this->actingAs($this->admin)->get(route('admin.users.index'));
 
         $response->assertStatus(200);
         $response->assertSee('User Management');
@@ -56,14 +56,14 @@ class AdminUserManagementTest extends TestCase
 
     public function test_customer_cannot_view_user_list(): void
     {
-        $response = $this->actingAs($this->customer)->get('/admin/users');
+        $response = $this->actingAs($this->customer)->get(route('admin.users.index'));
 
         $response->assertStatus(403);
     }
 
     public function test_admin_can_create_user_with_opening_balance(): void
     {
-        $response = $this->actingAs($this->admin)->post('/admin/users', [
+        $response = $this->actingAs($this->admin)->post(route('admin.users.store'), [
             'name' => 'Created Customer',
             'email' => 'created@example.com',
             'role_id' => $this->customerRole->id,
@@ -100,7 +100,7 @@ class AdminUserManagementTest extends TestCase
             'status' => Transaction::STATUS['Success'],
         ]);
 
-        $response = $this->actingAs($this->admin)->get("/admin/users/{$this->customer->uuid}");
+        $response = $this->actingAs($this->admin)->get(route('admin.users.show', $this->customer->uuid));
 
         $response->assertStatus(200);
         $response->assertSee($this->customer->email);
@@ -110,12 +110,12 @@ class AdminUserManagementTest extends TestCase
 
     public function test_admin_can_block_and_unblock_user(): void
     {
-        $blockResponse = $this->actingAs($this->admin)->patch("/admin/users/{$this->customer->uuid}/block");
+        $blockResponse = $this->actingAs($this->admin)->patch(route('admin.users.block', $this->customer->uuid));
 
         $blockResponse->assertRedirect();
         $this->assertNotNull($this->customer->fresh()->blocked_at);
 
-        $unblockResponse = $this->actingAs($this->admin)->patch("/admin/users/{$this->customer->uuid}/unblock");
+        $unblockResponse = $this->actingAs($this->admin)->patch(route('admin.users.unblock', $this->customer->uuid));
 
         $unblockResponse->assertRedirect();
         $this->assertNull($this->customer->fresh()->blocked_at);
@@ -125,7 +125,7 @@ class AdminUserManagementTest extends TestCase
     {
         $this->customer->forceFill(['blocked_at' => now()])->save();
 
-        $response = $this->post('/login', [
+        $response = $this->post(route('login'), [
             'email' => $this->customer->email,
             'password' => 'password',
         ]);
@@ -138,17 +138,17 @@ class AdminUserManagementTest extends TestCase
     {
         $this->customer->forceFill(['blocked_at' => now()])->save();
 
-        $response = $this->actingAs($this->customer)->get('/');
+        $response = $this->actingAs($this->customer)->get(route('home'));
 
-        $response->assertRedirect('/login');
+        $response->assertRedirect(route('login'));
         $this->assertGuest();
     }
 
     public function test_admin_can_soft_delete_user(): void
     {
-        $response = $this->actingAs($this->admin)->delete("/admin/users/{$this->customer->uuid}");
+        $response = $this->actingAs($this->admin)->delete(route('admin.users.destroy', $this->customer->uuid));
 
-        $response->assertRedirect('/admin/users');
+        $response->assertRedirect(route('admin.users.index'));
         $this->assertSoftDeleted('users', [
             'id' => $this->customer->id,
         ]);
@@ -156,7 +156,7 @@ class AdminUserManagementTest extends TestCase
 
     public function test_admin_cannot_delete_self(): void
     {
-        $response = $this->actingAs($this->admin)->delete("/admin/users/{$this->admin->uuid}");
+        $response = $this->actingAs($this->admin)->delete(route('admin.users.destroy', $this->admin->uuid));
 
         $response->assertStatus(422);
         $this->assertNotSoftDeleted('users', [

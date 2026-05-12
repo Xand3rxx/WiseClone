@@ -45,7 +45,7 @@ class AdminRateManagementTest extends TestCase
 
     public function test_admin_can_view_rate_management_page(): void
     {
-        $response = $this->actingAs($this->admin)->get('/admin/rates');
+        $response = $this->actingAs($this->admin)->get(route('admin.rates.index'));
 
         $response->assertStatus(200);
         $response->assertSee('Rate Management');
@@ -54,14 +54,14 @@ class AdminRateManagementTest extends TestCase
 
     public function test_customer_cannot_view_rate_management_page(): void
     {
-        $response = $this->actingAs($this->customer)->get('/admin/rates');
+        $response = $this->actingAs($this->customer)->get(route('admin.rates.index'));
 
         $response->assertStatus(403);
     }
 
     public function test_admin_can_update_rate_and_fees(): void
     {
-        $response = $this->actingAs($this->admin)->patch("/admin/rates/{$this->charge->id}", [
+        $response = $this->actingAs($this->admin)->patch(route('admin.rates.update', $this->charge), [
             'rate' => 1405.25,
             'variable_percentage' => 0.22,
             'fixed_fee' => 1.75,
@@ -78,7 +78,7 @@ class AdminRateManagementTest extends TestCase
 
     public function test_customer_cannot_update_rate_and_fees(): void
     {
-        $response = $this->actingAs($this->customer)->patch("/admin/rates/{$this->charge->id}", [
+        $response = $this->actingAs($this->customer)->patch(route('admin.rates.update', $this->charge), [
             'rate' => 1405.25,
             'variable_percentage' => 0.22,
             'fixed_fee' => 1.75,

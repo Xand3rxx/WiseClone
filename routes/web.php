@@ -36,18 +36,20 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
     // Dashboard
     Route::get('/', [HomeController::class, 'index'])->name('home');
 
-    // Admin rate management
-    Route::get('admin/rates', [AdminRateController::class, 'index'])->name('admin.rates.index');
-    Route::patch('admin/rates/{charge}', [AdminRateController::class, 'update'])->name('admin.rates.update');
+    Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
+        // Admin rate management
+        Route::get('rates', [AdminRateController::class, 'index'])->name('rates.index');
+        Route::patch('rates/{charge}', [AdminRateController::class, 'update'])->name('rates.update');
 
-    // Admin user management
-    Route::get('admin/users', [AdminUserController::class, 'index'])->name('admin.users.index');
-    Route::get('admin/users/create', [AdminUserController::class, 'create'])->name('admin.users.create');
-    Route::post('admin/users', [AdminUserController::class, 'store'])->name('admin.users.store');
-    Route::get('admin/users/{uuid}', [AdminUserController::class, 'show'])->name('admin.users.show');
-    Route::patch('admin/users/{uuid}/block', [AdminUserController::class, 'block'])->name('admin.users.block');
-    Route::patch('admin/users/{uuid}/unblock', [AdminUserController::class, 'unblock'])->name('admin.users.unblock');
-    Route::delete('admin/users/{uuid}', [AdminUserController::class, 'destroy'])->name('admin.users.destroy');
+        // Admin user management
+        Route::get('users', [AdminUserController::class, 'index'])->name('users.index');
+        Route::get('users/create', [AdminUserController::class, 'create'])->name('users.create');
+        Route::post('users', [AdminUserController::class, 'store'])->name('users.store');
+        Route::get('users/{uuid}', [AdminUserController::class, 'show'])->name('users.show');
+        Route::patch('users/{uuid}/block', [AdminUserController::class, 'block'])->name('users.block');
+        Route::patch('users/{uuid}/unblock', [AdminUserController::class, 'unblock'])->name('users.unblock');
+        Route::delete('users/{uuid}', [AdminUserController::class, 'destroy'])->name('users.destroy');
+    });
 
     // Account security
     Route::get('account/password', [PasswordController::class, 'edit'])->name('account.password.edit');

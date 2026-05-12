@@ -35,7 +35,7 @@ class PasswordChangeTest extends TestCase
 
     public function test_user_can_view_change_password_page(): void
     {
-        $response = $this->actingAs($this->user)->get('/account/password');
+        $response = $this->actingAs($this->user)->get(route('account.password.edit'));
 
         $response->assertStatus(200);
         $response->assertSee('Change Password');
@@ -43,7 +43,7 @@ class PasswordChangeTest extends TestCase
 
     public function test_user_can_change_password(): void
     {
-        $response = $this->actingAs($this->user)->patch('/account/password', [
+        $response = $this->actingAs($this->user)->patch(route('account.password.update'), [
             'current_password' => 'OldWiseClone123!',
             'password' => 'NewWiseClone123!',
             'password_confirmation' => 'NewWiseClone123!',
@@ -56,7 +56,7 @@ class PasswordChangeTest extends TestCase
 
     public function test_user_cannot_change_password_with_wrong_current_password(): void
     {
-        $response = $this->actingAs($this->user)->patch('/account/password', [
+        $response = $this->actingAs($this->user)->patch(route('account.password.update'), [
             'current_password' => 'WrongWiseClone123!',
             'password' => 'NewWiseClone123!',
             'password_confirmation' => 'NewWiseClone123!',

@@ -4,29 +4,44 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CurrencyBalanceRequest;
+use App\Http\Requests\SourceConverterRequest;
+use App\Http\Requests\StoreTransactionRequest;
 use App\Models\Charge;
 use App\Models\Currency;
+use App\Models\IdempotencyKey;
 use App\Models\Transaction;
+use App\Models\TransferQuote;
 use App\Models\User;
+use App\Services\IdempotencyService;
+use App\Services\LedgerService;
+use App\Services\TransferQuoteService;
+use App\Support\Money;
 use App\Traits\CanPay;
 use App\Traits\ExchangeRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class TransactionController extends Controller
 {
     use CanPay, ExchangeRate;
 
+    public function __construct(
+        private readonly LedgerService $ledgerService,
+        private readonly TransferQuoteService $transferQuoteService,
+        private readonly IdempotencyService $idempotencyService
+    ) {}
+
     /**
      * Display a listing of transactions.
      */
-    public function index(): View
+    public function index(Request $request): View
     {
         /** @var User $user */
-        $user = Auth::user();
+        $user = $request->user();
         $transactions = $user->isAdmin()
             ? Transaction::with(['user', 'recipient', 'sourceCurrency', 'targetCurrency'])
                 ->latest()
@@ -42,36 +57,37 @@ class TransactionController extends Controller
     /**
      * Show the form for creating a new transaction.
      */
-    public function create(): View|RedirectResponse
+    public function create(Request $request): View|RedirectResponse
     {
         /** @var User $user */
-        $user = Auth::user();
+        $user = $request->user();
 
         $sourceCurrency = $user->currency;
-        $latestBalance = $user->latestCurrencyBalance;
+        $sourceAmount = $this->ledgerService->balanceFor($user, $sourceCurrency);
 
-        if (! $latestBalance) {
-            return redirect()->route('home')
-                ->with('error', 'No currency balance found. Please contact support to set up your account.');
-        }
-
-        $sourceAmount = $latestBalance->getBalanceForCurrency($sourceCurrency->code);
-
-        return $this->converter($sourceCurrency, $sourceCurrency, $sourceAmount, 'application.transactions.create');
+        return $this->converter($sourceCurrency, $sourceCurrency, $sourceAmount, 'application.transactions.create', $user);
     }
 
     /**
      * Store a newly created transaction in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreTransactionRequest $request): RedirectResponse
     {
-        $validated = $this->validateRequest();
-        $amount = Transaction::removeComma($validated['source_amount']);
+        $validated = $request->validated();
+        $amount = Money::round($validated['source_amount']);
         $currency = Currency::findOrFail($validated['source_currency_id']);
+        /** @var User $user */
+        $user = $request->user();
+        $idempotency = $this->idempotencyService->start($user->id, 'transfer.store', $validated['idempotency_key'], $validated);
+
+        if ($idempotency->status === IdempotencyKey::STATUS_COMPLETED) {
+            return redirect()->route($idempotency->response_payload['route'] ?? 'home')
+                ->with($idempotency->response_payload['flash_type'] ?? 'success', $idempotency->response_payload['message'] ?? 'Your transaction was already processed.');
+        }
 
         // Prevent self-transfer
         $recipient = User::where('uuid', $validated['recipient_uuid'])->first();
-        if ($recipient && $recipient->id === Auth::id()) {
+        if ($recipient && $recipient->id === $user->id) {
             return back()->with('error', 'Sorry! You cannot transfer money to yourself.');
         }
 
@@ -86,34 +102,64 @@ class TransactionController extends Controller
         }
 
         // Validate minimum amount
-        if ($amount < 0.01) {
+        if (Money::isLessThan($amount, '0.01')) {
             return back()->with('error', "Sorry! The source amount cannot be less than {$currency->symbol}0.01.");
         }
 
         // Calculate the target amount to be sent to recipient
-        $validated = $this->calculation($validated, $amount);
+        try {
+            $quote = $this->transferQuoteService->usableQuoteFor($user, $validated['quote_uuid']);
+        } catch (\Exception $e) {
+            $this->idempotencyService->fail($idempotency, $e->getMessage());
 
-        if (abs((float) $validated['target_amount'] - round((float) $validated['targetAmount'], 2)) > 0.01) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $validated = $this->calculation($validated, $amount, $user, $quote);
+
+        if (Money::compare($quote->source_amount, $amount) !== 0
+            || (int) $quote->source_currency_id !== (int) $validated['source_currency_id']
+            || (int) $quote->target_currency_id !== (int) $validated['target_currency_id']
+            || Money::isGreaterThan(abs((float) Money::subtract($validated['target_amount'], $quote->target_amount)), '0.01')) {
+            $this->idempotencyService->fail($idempotency, 'The quote changed before submission.');
+
             return back()->with('error', 'The quote changed before submission. Please review the latest amount and try again.');
         }
 
         // Ensure amount after fees is positive
-        if ($validated['amountToConvert'] <= 0) {
+        if (Money::isLessThan($validated['amountToConvert'], '0.01')) {
             return back()->with('error', 'The transfer amount is too small. The fees exceed the amount you want to send.');
         }
 
         try {
             if (Transaction::recordTransfer($validated, $amount)) {
+                $this->idempotencyService->complete($idempotency, [
+                    'route' => 'home',
+                    'flash_type' => 'success',
+                    'message' => 'Your transaction was successful',
+                ]);
+
                 return redirect()->route('home')
                     ->with('success', 'Your transaction was successful');
             }
 
+            $this->idempotencyService->fail($idempotency, 'An error occurred while making the transfer.');
+
             return back()->with('error', 'Sorry! An error occurred while making the transfer.');
         } catch (\Exception $e) {
             // Record failed attempts without mutating balances.
-            Transaction::failedTransaction($validated, $amount, 'Debit', Auth::id(), $validated['recipient_id']);
-            Transaction::failedTransaction($validated, $validated['targetAmount'], 'Credit', $validated['recipient_id'], Auth::id());
+            Transaction::failedTransaction($validated, $amount, 'Debit', $user->id, $validated['recipient_id']);
+            Transaction::failedTransaction($validated, $validated['targetAmount'], 'Credit', $validated['recipient_id'], $user->id);
+            $this->ledgerService->recordFailedTransfer(
+                $user,
+                $currency,
+                $validated['quote'] ?? null,
+                $validated['transfer_group_uuid'] ?? (string) Str::uuid(),
+                $e->getMessage(),
+                $idempotency
+            );
 
+            $this->idempotencyService->fail($idempotency, 'An error occurred while making the transaction.');
             report($e);
 
             return redirect()->route('home')
@@ -124,7 +170,7 @@ class TransactionController extends Controller
     /**
      * Display the details of a specific transaction.
      */
-    public function show(string $uuid): View
+    public function show(Request $request, string $uuid): View
     {
         $transaction = Transaction::where('uuid', $uuid)
             ->with(['currencyBalance', 'user', 'recipient', 'sourceCurrency', 'targetCurrency'])
@@ -132,7 +178,7 @@ class TransactionController extends Controller
 
         // Ensure user can only view their own transactions
         /** @var User $user */
-        $user = Auth::user();
+        $user = $request->user();
         if (! $user->isAdmin() && $transaction->user_id !== $user->id && $transaction->recipient_id !== $user->id) {
             abort(403, 'Unauthorized to view this transaction.');
         }
@@ -167,100 +213,75 @@ class TransactionController extends Controller
     /**
      * Convert the source amount and currency (AJAX endpoint).
      */
-    public function sourceConverter(Request $request): View|JsonResponse|null
+    public function sourceConverter(SourceConverterRequest $request): View|JsonResponse|null
     {
         if (! $request->ajax()) {
             return response()->json(['error' => 'Invalid request'], 400);
         }
 
-        $filters = $request->only('source_amount', 'source_currency_id', 'target_currency_id');
-
-        // Validate input
-        if (empty($filters['source_amount']) || $filters['source_amount'] === 'NaN') {
-            return response()->json(['error' => 'A valid source amount is required.'], 422);
-        }
+        $filters = $request->validated();
 
         /** @var User $user */
-        $user = Auth::user();
-        $latestCurrencyBalance = $user->latestCurrencyBalance;
-
-        if (! $latestCurrencyBalance) {
-            return response()->json(['error' => 'No balance found'], 400);
-        }
-
+        $user = $request->user();
         // Get the maximum available amount for the source currency
         $sourceCurrency = Currency::findOrFail($filters['source_currency_id']);
-        $availableBalance = $latestCurrencyBalance->getBalanceForCurrency($sourceCurrency->code);
-        $sourceAmount = min((float) $filters['source_amount'], $availableBalance);
+        $availableBalance = $this->ledgerService->balanceFor($user, $sourceCurrency);
+        if (Money::isGreaterThan($filters['source_amount'], (string) $availableBalance)) {
+            return response()->json([
+                'error' => 'Amount cannot be greater than the available '.$sourceCurrency->code.' balance.',
+            ], 422);
+        }
+
+        $sourceAmount = Money::round($filters['source_amount']);
 
         $targetCurrency = Currency::findOrFail($filters['target_currency_id']);
 
-        return $this->converter($sourceCurrency, $targetCurrency, $sourceAmount, 'application.transactions.includes._transaction_breakdown');
+        return $this->converter($sourceCurrency, $targetCurrency, $sourceAmount, 'application.transactions.includes._transaction_breakdown', $user);
     }
 
     /**
      * Convert currencies and render the appropriate view.
      */
-    public function converter(Currency $sourceCurrency, Currency $targetCurrency, float $sourceAmount, string $view): View
+    public function converter(Currency $sourceCurrency, Currency $targetCurrency, float|string $sourceAmount, string $view, User $user): View
     {
-        $charge = Charge::where('source_currency_id', $sourceCurrency->id)
-            ->where('target_currency_id', $targetCurrency->id)
-            ->firstOrFail();
-
-        $fixedFee = (float) $charge->fixed_fee;
-        $variableFee = ($charge->variable_percentage / 100) * $sourceAmount;
-        $transferFee = $variableFee + $fixedFee;
-        $amountToConvert = max(0, $sourceAmount - $transferFee);
-        $rate = $this->getRate(
-            (float) $charge->rate,
-            $sourceCurrency->code,
-            $targetCurrency->code,
-            $sourceAmount
-        );
-        $targetAmount = $amountToConvert * $rate;
-
-        /** @var User $user */
-        $user = Auth::user();
+        $quote = $this->transferQuoteService->createQuote($user, $sourceCurrency, $targetCurrency, $sourceAmount);
+        $summary = $this->transferQuoteService->summaryFor($quote);
 
         return view($view, [
             'user' => $user,
             'recipients' => User::whereKeyNot($user->id)
+                ->whereNull('blocked_at')
                 ->whereHas('latestCurrencyBalance')
                 ->orderBy('name')
                 ->get(),
             'currencies' => Currency::all(),
             'sourceCurrency' => $sourceCurrency,
             'targetCurrency' => $targetCurrency,
-            'sourceCurrencyBalance' => $sourceAmount,
-            'targetAmount' => $targetAmount,
+            'sourceCurrencyBalance' => (float) $sourceAmount,
+            'targetAmount' => $quote->target_amount,
+            'quote' => $quote,
+            'idempotencyKey' => (string) Str::uuid(),
             'charges' => Charge::all(),
-            'summary' => [
-                'transferFee' => number_format($transferFee, 2),
-                'amountToConvert' => number_format($amountToConvert, 2),
-                'fixedFee' => number_format($fixedFee, 2),
-                'variableFeeText' => number_format($variableFee, 2).' '.$sourceCurrency->code.' ('.$charge->variable_percentage.'%)',
-                'variableFee' => number_format($variableFee, 2),
-                'rate' => $rate,
-            ],
+            'summary' => $summary,
         ]);
     }
 
     /**
      * Get exchange rate (current or fallback).
      */
-    public function getRate(float $rate, string $sourceCurrency, string $targetCurrency, float $sourceAmount): float
+    public function getRate(float|string $rate, string $sourceCurrency, string $targetCurrency, float|string $sourceAmount): string
     {
-        $currentRate = $this->currentExchangeRate($sourceCurrency, $targetCurrency, $sourceAmount);
+        $currentRate = $this->currentExchangeRate($sourceCurrency, $targetCurrency, (float) $sourceAmount);
 
-        return $currentRate ?? $rate;
+        return Money::assertDecimal($currentRate ?? $rate);
     }
 
     /**
      * Calculate variable fee.
      */
-    public function getVariableFee(float $variablePercentage, float $sourceAmount): float
+    public function getVariableFee(float|string $variablePercentage, float|string $sourceAmount): string
     {
-        return ($variablePercentage / 100) * $sourceAmount;
+        return Money::percentage($sourceAmount, $variablePercentage);
     }
 
     /**
@@ -269,25 +290,21 @@ class TransactionController extends Controller
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    public function calculation(array $validated, float $amount): array
+    public function calculation(array $validated, float|string $amount, User $user, TransferQuote $quote): array
     {
-        $charge = Charge::where('source_currency_id', $validated['source_currency_id'])
-            ->where('target_currency_id', $validated['target_currency_id'])
-            ->firstOrFail();
-
-        $validated['user_id'] = Auth::id();
-        $validated['recipient_id'] = User::where('uuid', $validated['recipient_uuid'])->firstOrFail()->id;
-        $validated['variableFee'] = $this->getVariableFee((float) $charge->variable_percentage, $amount);
-        $validated['rate'] = $this->getRate(
-            (float) $charge->rate,
-            $charge->sourceCurrency->code,
-            $charge->targetCurrency->code,
-            $amount
-        );
-        $validated['fixedFee'] = (float) $charge->fixed_fee;
-        $validated['transferFee'] = $validated['variableFee'] + $validated['fixedFee'];
-        $validated['amountToConvert'] = $amount - $validated['transferFee'];
-        $validated['targetAmount'] = $validated['amountToConvert'] * $validated['rate'];
+        $validated['user_id'] = $user->id;
+        $validated['recipient_id'] = User::where('uuid', $validated['recipient_uuid'])
+            ->whereNull('blocked_at')
+            ->firstOrFail()
+            ->id;
+        $validated['variableFee'] = (string) $quote->variable_fee;
+        $validated['rate'] = (string) $quote->rate;
+        $validated['fixedFee'] = (string) $quote->fixed_fee;
+        $validated['transferFee'] = (string) $quote->transfer_fee;
+        $validated['amountToConvert'] = (string) $quote->amount_to_convert;
+        $validated['targetAmount'] = (string) $quote->target_amount;
+        $validated['transfer_group_uuid'] = (string) Str::uuid();
+        $validated['quote'] = $quote;
         $validated['type'] = 'Debit';
         $validated['currency_id'] = $validated['source_currency_id'];
         $validated['sign'] = '-';
@@ -296,54 +313,18 @@ class TransactionController extends Controller
     }
 
     /**
-     * Validate user input fields.
-     *
-     * @return array<string, mixed>
-     */
-    private function validateRequest(): array
-    {
-        // Sanitize numeric inputs by removing commas (from Cleave.js formatting)
-        $request = request();
-        $request->merge([
-            'source_amount' => $this->sanitizeNumericInput($request->input('source_amount')),
-            'target_amount' => $this->sanitizeNumericInput($request->input('target_amount')),
-        ]);
-
-        return $request->validate([
-            'recipient_uuid' => 'bail|required|string|exists:users,uuid',
-            'source_amount' => 'bail|required|numeric|min:0.01|max:99999999.99',
-            'target_amount' => 'bail|required|numeric|min:0|max:99999999.99',
-            'source_currency_id' => 'bail|required|integer|exists:currencies,id',
-            'target_currency_id' => 'bail|required|integer|exists:currencies,id',
-        ]);
-    }
-
-    /**
-     * Sanitize numeric input by removing formatting characters.
-     */
-    private function sanitizeNumericInput(?string $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return $value;
-        }
-
-        // Remove commas and other non-numeric characters except decimal point
-        return preg_replace('/[^\d.]/', '', $value);
-    }
-
-    /**
      * Get currency balance for AJAX requests.
      */
-    public function currencyBalance(Request $request): JsonResponse|array
+    public function currencyBalance(CurrencyBalanceRequest $request): JsonResponse|array
     {
         if (! $request->ajax()) {
             return response()->json(['error' => 'Invalid request'], 400);
         }
 
-        $filters = $request->only('source_currency_id');
+        $filters = $request->validated();
         $sourceCurrency = Currency::findOrFail($filters['source_currency_id']);
         /** @var User $user */
-        $user = Auth::user();
+        $user = $request->user();
         $latestCurrencyBalance = $user->latestCurrencyBalance;
 
         if (! $latestCurrencyBalance) {
@@ -356,24 +337,5 @@ class TransactionController extends Controller
             'sourceCurrency' => $sourceCurrency,
             'sourceCurrencyBalance' => $sourceAmount,
         ];
-    }
-
-    /**
-     * Alternate data for recipient transaction record.
-     *
-     * @param  array<string, mixed>  $validated
-     * @return array<string, mixed>
-     */
-    public function alternateSourceRecord(array $validated): array
-    {
-        $originalRecipientId = $validated['recipient_id'];
-
-        $validated['type'] = 'Credit';
-        $validated['user_id'] = $originalRecipientId;
-        $validated['recipient_id'] = Auth::id();
-        $validated['currency_id'] = $validated['target_currency_id'];
-        $validated['sign'] = '+';
-
-        return $validated;
     }
 }

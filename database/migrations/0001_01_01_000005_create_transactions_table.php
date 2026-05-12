@@ -16,10 +16,10 @@ return new class extends Migration
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid');
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('recipient_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('source_currency_id')->constrained('currencies')->onDelete('cascade');
-            $table->foreignId('target_currency_id')->constrained('currencies')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('recipient_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('source_currency_id')->constrained('currencies')->restrictOnDelete();
+            $table->foreignId('target_currency_id')->constrained('currencies')->restrictOnDelete();
             $table->decimal('amount', 15, 2);
             $table->string('reference', 50)->unique();
             $table->decimal('rate', 12, 6);

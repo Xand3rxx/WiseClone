@@ -34,6 +34,8 @@
         <span class="fs-4 me-3">{{ $targetCurrency['symbol'] }}</span>
         <input type="text" class="text-end form-control form-control-solid fs-1 @error('target_amount') is-invalid @enderror" data-symbol="{{ $targetCurrency['symbol'] }}" id="target-amount-display" value="{{ number_format((float)$targetAmount, 2) }}" style="width: 50% !important" readonly>
         <input type="hidden" name="target_amount" id="target-amount" value="{{ number_format((float)$targetAmount, 2, '.', '') }}">
+        <input type="hidden" name="quote_uuid" id="quote-uuid" value="{{ $quote->uuid ?? '' }}">
+        <input type="hidden" name="idempotency_key" id="idempotency-key" value="{{ $idempotencyKey ?? (string) \Illuminate\Support\Str::uuid() }}">
     </label>
     <div class="separator separator-dashed"></div>
 </div>

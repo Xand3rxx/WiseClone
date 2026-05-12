@@ -38,14 +38,14 @@ class AuthenticationTest extends TestCase
 
     public function test_login_page_is_accessible(): void
     {
-        $response = $this->get('/login');
+        $response = $this->get(route('login'));
 
         $response->assertStatus(200);
     }
 
     public function test_register_page_is_accessible(): void
     {
-        $response = $this->get('/register');
+        $response = $this->get(route('register'));
 
         $response->assertStatus(200);
     }
@@ -56,12 +56,12 @@ class AuthenticationTest extends TestCase
             'password' => bcrypt('password'),
         ]);
 
-        $response = $this->post('/login', [
+        $response = $this->post(route('login'), [
             'email' => $user->email,
             'password' => 'password',
         ]);
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
         $this->assertAuthenticatedAs($user);
     }
 
@@ -71,7 +71,7 @@ class AuthenticationTest extends TestCase
             'password' => bcrypt('password'),
         ]);
 
-        $response = $this->post('/login', [
+        $response = $this->post(route('login'), [
             'email' => $user->email,
             'password' => 'wrong-password',
         ]);
@@ -83,36 +83,37 @@ class AuthenticationTest extends TestCase
     {
         Notification::fake();
 
-        $response = $this->post('/register', [
+        $response = $this->post(route('register'), [
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'password' => 'WiseCloneMvpPassphrase123!',
-            'password_confirmation' => 'WiseCloneMvpPassphrase123!',
+            'password' => 'WiseCloneSecurePassphrase123!',
+            'password_confirmation' => 'WiseCloneSecurePassphrase123!',
         ]);
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
         $this->assertDatabaseHas('users', [
             'email' => 'test@example.com',
         ]);
-        $this->get('/')->assertRedirect('/email/verify');
+        $this->get(route('home'))->assertRedirect(route('verification.notice'));
     }
 
     public function test_authenticated_user_can_logout(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
 
         $this->actingAs($user);
 
-        $response = $this->post('/logout');
+        $response = $this->post(route('logout'));
 
-        $response->assertRedirect('/');
+        $response->assertRedirect(route('home'));
         $this->assertGuest();
     }
 
     public function test_guests_are_redirected_to_login(): void
     {
-        $response = $this->get('/');
+        $response = $this->get(route('home'));
 
-        $response->assertRedirect('/login');
+        $response->assertRedirect(route('login'));
     }
 }

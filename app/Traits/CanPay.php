@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Traits;
 
+use App\Support\Money;
+
 trait CanPay
 {
     /**
@@ -13,10 +15,10 @@ trait CanPay
      * Returns FALSE if insufficient balance or balance is zero.
      *
      * @param  string  $currencyCode  The currency code (USD, EUR, NGN)
-     * @param  float  $amount  The amount to pay
+     * @param  float|string  $amount  The amount to pay
      * @return bool True if payment can be made, false otherwise
      */
-    public function canMakePayment(string $currencyCode, float $amount): bool
+    public function canMakePayment(string $currencyCode, float|string $amount): bool
     {
         $user = auth()->user();
 
@@ -35,7 +37,8 @@ trait CanPay
         // User can pay if:
         // 1. Available balance is greater than zero
         // 2. Amount requested is less than or equal to available balance
-        return $availableBalance > 0 && $amount <= $availableBalance;
+        return Money::isGreaterThan($availableBalance, '0')
+            && ! Money::isGreaterThan($amount, (string) $availableBalance);
     }
 
     /**

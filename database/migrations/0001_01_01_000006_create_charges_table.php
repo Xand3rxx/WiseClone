@@ -16,8 +16,8 @@ return new class extends Migration
         Schema::create('charges', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid');
-            $table->foreignId('source_currency_id')->constrained('currencies')->onDelete('cascade');
-            $table->foreignId('target_currency_id')->constrained('currencies')->onDelete('cascade');
+            $table->foreignId('source_currency_id')->constrained('currencies')->restrictOnDelete();
+            $table->foreignId('target_currency_id')->constrained('currencies')->restrictOnDelete();
             $table->decimal('rate', 12, 6);
             $table->decimal('variable_percentage', 8, 4);
             $table->decimal('fixed_fee', 10, 4);

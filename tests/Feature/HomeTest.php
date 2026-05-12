@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class HomeTest extends TestCase
@@ -79,7 +80,7 @@ class HomeTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/');
+        $response = $this->get(route('home'));
 
         $response->assertStatus(200);
     }
@@ -111,9 +112,11 @@ class HomeTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->post('/fund-account');
+        $response = $this->post(route('fund_account'), [
+            'idempotency_key' => (string) Str::uuid(),
+        ]);
 
-        $response->assertRedirect('/transaction/create');
+        $response->assertRedirect(route('transaction.create'));
         $response->assertSessionHas('success');
 
         // Check that balance was updated
@@ -148,7 +151,9 @@ class HomeTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->post('/fund-account');
+        $response = $this->post(route('fund_account'), [
+            'idempotency_key' => (string) Str::uuid(),
+        ]);
 
         // Should redirect back with info message
         $response->assertSessionHas('info');
